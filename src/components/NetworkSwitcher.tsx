@@ -9,6 +9,7 @@ const networks = [
     icon: Zap,
     color: "#1F87FC",
     dot: "#22c55e",
+    href: "https://app.starkzuri.com/",
   },
   {
     id: "testnet",
@@ -17,6 +18,7 @@ const networks = [
     icon: Radio,
     color: "#a78bfa",
     dot: "#f59e0b",
+    href: "https://testnet.starkzuri.com/",
   },
 ];
 
@@ -36,6 +38,14 @@ export default function NetworkSwitcher({ defaultNetwork = "mainnet" }) {
   }, []);
 
   const Icon = selected.icon;
+
+  const handleNetworkSelect = (network) => {
+    setSelected(network);
+    setOpen(false);
+    if (network.href) {
+      window.open(network.href, "_blank", "noopener,noreferrer");
+    }
+  };
 
   return (
     <div ref={ref} style={{ position: "relative", width: "100%" }}>
@@ -144,10 +154,7 @@ export default function NetworkSwitcher({ defaultNetwork = "mainnet" }) {
             return (
               <button
                 key={network.id}
-                onClick={() => {
-                  setSelected(network);
-                  setOpen(false);
-                }}
+                onClick={() => handleNetworkSelect(network)}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -209,8 +216,22 @@ export default function NetworkSwitcher({ defaultNetwork = "mainnet" }) {
                   >
                     {network.description}
                   </span>
+                  {/* Show destination URL as a subtle hint */}
+                  {network.href && (
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 10,
+                        opacity: 0.3,
+                        marginTop: 2,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {network.href.replace(/^https?:\/\//, "")}
+                    </span>
+                  )}
                 </span>
-                {isActive && (
+                {isActive ? (
                   <span
                     style={{
                       fontSize: 10,
@@ -221,10 +242,31 @@ export default function NetworkSwitcher({ defaultNetwork = "mainnet" }) {
                       border: `1px solid ${network.color}44`,
                       fontWeight: 600,
                       letterSpacing: "0.04em",
+                      flexShrink: 0,
                     }}
                   >
                     ACTIVE
                   </span>
+                ) : (
+                  /* External link arrow icon for non-active items */
+                  <svg
+                    style={{
+                      width: 12,
+                      height: 12,
+                      opacity: 0.3,
+                      flexShrink: 0,
+                    }}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
                 )}
               </button>
             );
@@ -241,7 +283,7 @@ export default function NetworkSwitcher({ defaultNetwork = "mainnet" }) {
             textAlign: "center",
           }}
         >
-          Select a network to switch
+          Selecting a network will open it in a new tab
         </div>
       </div>
 
