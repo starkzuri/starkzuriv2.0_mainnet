@@ -43,28 +43,6 @@ interface PortfolioProps {
   onViewMarket: (id: string) => void;
 }
 
-const calculateValue = (
-  shares: number,
-  price: number,
-  totalSideShares: number,
-  totalPot: number,
-  status: number,
-  isWinningSide: boolean,
-) => {
-  if (shares <= 0) return 0;
-
-  if (status === 3) {
-    if (!isWinningSide) return 0;
-    if (totalSideShares <= 0) return 0;
-
-    const ownership = shares / totalSideShares;
-    const grossPayout = ownership * totalPot;
-    return grossPayout * 0.98;
-  }
-
-  return shares * price;
-};
-
 export function Portfolio({ onViewMarket }: PortfolioProps) {
   const { address, connectWallet, account } = useWallet();
   const [positions, setPositions] = useState<UserPosition[]>([]);
@@ -112,41 +90,34 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
 
             let currentRealValue = 0;
 
-            if (claimed) {
+            if (claimed || market.status === 3) {
               const isYesWinner = market.outcome === true;
+
+              // 1. Get the user's winning shares
               const winningShares = isYesWinner ? yesShares : noShares;
-              const totalWinningReal = isYesWinner ? totalYesReal : totalNoReal;
+
+              // 2. Get the TOTAL real shares for the winning side
+              const totalWinningReal = isYesWinner
+                ? Number(market.yesShares || 0)
+                : Number(market.noShares || 0);
+
+              // 3. Get the REAL money in the pot (Ignore poolYes/poolNo!)
+              const totalRealVolume = Number(market.totalVolume || 0);
 
               if (totalWinningReal > 0 && winningShares > 0) {
+                // Calculate their exact percentage of the winning pool
                 const ownership = winningShares / totalWinningReal;
-                const grossPayout = ownership * totalPot;
+
+                // Multiply their percentage by the real money pot
+                const grossPayout = ownership * totalRealVolume;
+
+                // Apply the 2% fee your smart contract charges
                 currentRealValue = grossPayout * 0.98;
-              } else {
-                currentRealValue = costBasis + costBasis * 0.1;
               }
             } else {
-              const yesIsWinner =
-                market.status === 3 ? market.outcome === true : false;
-              const valYes = calculateValue(
-                yesShares,
-                Number(market.yesPrice || 0),
-                totalYesReal,
-                totalPot,
-                market.status || 1,
-                yesIsWinner,
-              );
-
-              const noIsWinner =
-                market.status === 3 ? market.outcome === false : false;
-              const valNo = calculateValue(
-                noShares,
-                Number(market.noPrice || 0),
-                totalNoReal,
-                totalPot,
-                market.status || 1,
-                noIsWinner,
-              );
-
+              // NO MORE calculateValue() calls! Just straight math for active markets:
+              const valYes = yesShares * Number(market.yesPrice || 0);
+              const valNo = noShares * Number(market.noPrice || 0);
               currentRealValue = valYes + valNo;
             }
 
