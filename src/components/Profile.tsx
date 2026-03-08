@@ -593,9 +593,18 @@ export function Profile({ targetAddress }: ProfileProps) {
                     </div>
                     <button
                       onClick={() => {
+                        // 1. Strip the 0x, pad with leading zeros to 64 chars, and add 0x back.
+                        // (We add a fallback just in case activeAddress is undefined)
+                        const safeAddress = activeAddress
+                          ? "0x" +
+                            activeAddress.replace("0x", "").padStart(64, "0")
+                          : "0x0";
+
+                        // 2. Write the perfectly formatted address to the clipboard
                         navigator.clipboard.writeText(
-                          `${window.location.origin}/?ref=${activeAddress}`,
+                          `${window.location.origin}/?ref=${safeAddress}`,
                         );
+
                         toast.success("Referral link copied!");
                       }}
                       className="p-2 bg-[#1F87FC]/20 text-[#1F87FC] rounded hover:bg-[#1F87FC] hover:text-white transition-all"
