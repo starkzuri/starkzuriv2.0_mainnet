@@ -115,7 +115,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
 
-  const API_URL = "https://starknet-indexer-apibara-mainnet.onrender.com";
+  const API_URL = "https://starknet-indexer-apibara-mainnet-19ew.onrender.com";
   console.log("my shares ", myShares);
   // 1. Fetch Market Data & History
   // 1. Fetch Market Data & History (Optimized)
