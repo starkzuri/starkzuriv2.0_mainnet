@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@cartridge/connector": "^0.11.3",
+    "@privy-io/react-auth": "^3.17.0",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -51,6 +52,7 @@
     "sonner": "^2.0.3",
     "starknet": "^8.9.2",
     "starknetkit": "^3.2.0",
+    "starkzap": "^1.0.0",
     "tailwind-merge": "*",
     "vaul": "^1.1.2"
   },

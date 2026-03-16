@@ -11,7 +11,7 @@ import { PredictionCard } from "./PredictionCard";
 import { Prediction } from "../types/prediction";
 import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
 // 🟢 1. NEW IMPORTS
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 import { toast } from "sonner";
 
 // CONFIG
@@ -26,7 +26,7 @@ interface MarketExploreProps {
 
 export function MarketExplore({ onViewMarket }: MarketExploreProps) {
   // 🟢 2. GET WALLET ADDRESS
-  const { address } = useWallet();
+  const { address } = useAuth();
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);

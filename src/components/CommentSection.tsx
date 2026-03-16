@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-// 🟢 FIX: Import from your custom context, NOT @starknet-react/core
-import { useWallet } from "../context/WalletContext";
+
+
+import { useAuth } from "../hooks/useAuth";
 
 // Your Render Backend URL
-const API_URL = "https://starknet-indexer-apibara-mainnet.onrender.com";
+const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
 
 export default function CommentsSection({ marketId }: { marketId: number }) {
   const [comments, setComments] = useState<any[]>([]);
@@ -11,7 +12,7 @@ export default function CommentsSection({ marketId }: { marketId: number }) {
   const [loading, setLoading] = useState(false);
 
   // 🟢 FIX: Use your custom hook here
-  const { address } = useWallet();
+  const { address } = useAuth();
 
   // 1. Fetch Comments
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 import { useResolution } from "../hooks/useResolution";
 import { AlertTriangle, Gavel, CheckCircle, Clock } from "lucide-react";
 
@@ -25,7 +25,7 @@ export function ResolutionPanel({
   proposalTimestamp,
   myShares = { yes: 0, no: 0, hasClaimed: false }, // 🟢 Default false
 }: ResolutionPanelProps) {
-  const { address } = useWallet();
+  const { address } = useAuth();
   const { proposeOutcome, challengeOutcome, finalizeMarket, claimWinnings } =
     useResolution();
 

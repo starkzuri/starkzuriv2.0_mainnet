@@ -19,7 +19,7 @@ import {
   Eye, // 🟢 Added Eye icon for spectator mode
 } from "lucide-react";
 import { toast } from "sonner";
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth"; // 🟢 Swapped to your unified hook
 import { useTheme } from "next-themes";
 import { MediaPreview } from "./MediaPreview";
 import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
@@ -35,15 +35,16 @@ interface ProfileProps {
 }
 
 export function Profile({ targetAddress }: ProfileProps) {
-  const { address, disconnectWallet } = useWallet();
+  // 🟢 1. Pull from the unified hook
+  const { address, disconnect } = useAuth();
   const { setTheme, theme } = useTheme();
   const { updateProfile } = useProfile();
 
-  // 🟢 1. LOGIC: WHO ARE WE LOOKING AT?
+  // 🟢 2. LOGIC: WHO ARE WE LOOKING AT?
   // If targetAddress exists, use it. Otherwise, fallback to connected wallet.
   const activeAddress = targetAddress || address;
 
-  // 🟢 2. LOGIC: AM I LOOKING AT MYSELF?
+  // 🟢 3. LOGIC: AM I LOOKING AT MYSELF?
   // We use BigInt to ensure 0x0abc equals 0xabc
   const isOwnProfile =
     address && activeAddress
@@ -75,8 +76,7 @@ export function Profile({ targetAddress }: ProfileProps) {
 
   // --- FETCH DATA ---
   useEffect(() => {
-    // 🟢 3. FIX FETCH LOGIC:
-    // Don't return if !address. Return if !activeAddress (we might be viewing someone while logged out)
+    // 🟢 Don't return if !address. Return if !activeAddress (we might be viewing someone while logged out)
     if (!activeAddress) return;
 
     const fetchData = async () => {
@@ -149,7 +149,7 @@ export function Profile({ targetAddress }: ProfileProps) {
       }
     };
     fetchData();
-  }, [activeAddress]); // 🟢 Depend on activeAddress
+  }, [activeAddress]); 
 
   // --- HANDLE SAVE ---
   const handleSave = async () => {
@@ -238,7 +238,7 @@ export function Profile({ targetAddress }: ProfileProps) {
       {/* HEADER */}
       <div className="bg-[#0f0f1a] border border-[#1F87FC]/30 rounded-xl p-4 md:p-6 mb-4 md:mb-6">
         <div className="flex justify-end mb-4">
-          {/* 🟢 UI LOGIC: SHOW EDIT BUTTONS ONLY IF OWNING PROFILE */}
+          {/* SHOW EDIT BUTTONS ONLY IF OWNING PROFILE */}
           {isOwnProfile ? (
             !isEditing ? (
               <button
@@ -268,7 +268,7 @@ export function Profile({ targetAddress }: ProfileProps) {
               </div>
             )
           ) : (
-            // 🟢 UI LOGIC: SHOW 'SPECTATOR' BADGE IF VIEWING SOMEONE ELSE
+            // SHOW 'SPECTATOR' BADGE IF VIEWING SOMEONE ELSE
             <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1F87FC]/10 border border-[#1F87FC]/20 rounded-lg text-[#1F87FC] text-xs">
               <Eye className="w-3.5 h-3.5" /> Viewing User
             </div>
@@ -287,7 +287,7 @@ export function Profile({ targetAddress }: ProfileProps) {
               <User className="w-8 h-8 md:w-10 md:h-10 text-white" />
             )}
 
-            {/* 🟢 UI LOGIC: Only allow photo upload if editing AND owning profile */}
+            {/* Only allow photo upload if editing AND owning profile */}
             {isEditing && isOwnProfile && (
               <>
                 <input
@@ -306,7 +306,7 @@ export function Profile({ targetAddress }: ProfileProps) {
               </>
             )}
 
-            {/* Level Badge (Unchanged) */}
+            {/* Level Badge */}
             <div className="absolute -bottom-1 -right-1 bg-[#0a0a0f] border-2 border-[#1F87FC] rounded-full px-2 py-0.5 flex items-center gap-1 z-10">
               <Zap className="w-3 h-3 text-[#1F87FC]" />
               <span className="text-xs text-[#1F87FC]">
@@ -316,14 +316,13 @@ export function Profile({ targetAddress }: ProfileProps) {
           </div>
 
           <div className="flex-1 min-w-0">
-            {/* 🟢 UI LOGIC: Only show Inputs if editing AND owning profile */}
+            {/* Only show Inputs if editing AND owning profile */}
             {!isEditing ? (
               <>
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="text-foreground text-lg md:text-xl font-bold">
                     {formData.displayName || "Anonymous"}
                   </h2>
-                  {/* Badge */}
                   <div className="px-2 py-0.5 bg-gradient-to-r from-[#1F87FC]/20 to-[#00ff88]/20 border border-[#1F87FC]/40 rounded text-xs flex items-center gap-1">
                     <span>{currentLevel.icon}</span>
                     <span style={{ color: currentLevel.color }}>
@@ -339,7 +338,6 @@ export function Profile({ targetAddress }: ProfileProps) {
                 </p>
               </>
             ) : (
-              // EDIT MODE INPUTS
               <div className="space-y-3">
                 <input
                   type="text"
@@ -373,7 +371,7 @@ export function Profile({ targetAddress }: ProfileProps) {
           </div>
         </div>
 
-        {/* Stats (Unchanged) */}
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 border-t border-white/5 pt-4">
           <div className="text-center">
             <div className="text-xl md:text-2xl text-[#1F87FC] font-mono">
@@ -402,12 +400,9 @@ export function Profile({ targetAddress }: ProfileProps) {
         </div>
       </div>
 
-      {/* Financials (Unchanged) */}
-
       {/* Tabs */}
       <div className="flex gap-2 mb-4 md:mb-6 border-b border-border overflow-x-auto scrollbar-hide -mx-4 px-4">
         {tabs
-          // 🟢 UI LOGIC: HIDE SETTINGS TAB IF VIEWING SOMEONE ELSE
           .filter((tab) => isOwnProfile || tab.id !== "settings")
           .map((tab) => (
             <button
@@ -433,7 +428,7 @@ export function Profile({ targetAddress }: ProfileProps) {
           </div>
         ) : (
           <>
-            {/* 1. CREATED MARKETS (Unchanged) */}
+            {/* 1. CREATED MARKETS */}
             {activeTab === "predictions" &&
               (createdMarkets.length > 0 ? (
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
@@ -477,7 +472,7 @@ export function Profile({ targetAddress }: ProfileProps) {
                 </div>
               ))}
 
-            {/* 2. INVESTMENTS (Unchanged) */}
+            {/* 2. INVESTMENTS */}
             {activeTab === "investments" &&
               (investments.length > 0 ? (
                 <div className="space-y-3">
@@ -516,7 +511,7 @@ export function Profile({ targetAddress }: ProfileProps) {
                 </div>
               ))}
 
-            {/* 3. MEDIA GRID (Unchanged) */}
+            {/* 3. MEDIA GRID */}
             {activeTab === "media" &&
               (createdMarkets.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
@@ -544,7 +539,6 @@ export function Profile({ targetAddress }: ProfileProps) {
               ))}
 
             {/* 4. SETTINGS */}
-            {/* 🟢 UI LOGIC: DEFENSIVE CODING - ONLY RENDER SETTINGS IF OWNING PROFILE */}
             {activeTab === "settings" && isOwnProfile && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div className="bg-[#0f0f1a] border border-[#1F87FC]/30 rounded-xl p-4">
@@ -594,7 +588,6 @@ export function Profile({ targetAddress }: ProfileProps) {
                     <button
                       onClick={() => {
                         // 1. Strip the 0x, pad with leading zeros to 64 chars, and add 0x back.
-                        // (We add a fallback just in case activeAddress is undefined)
                         const safeAddress = activeAddress
                           ? "0x" +
                             activeAddress.replace("0x", "").padStart(64, "0")
@@ -646,7 +639,7 @@ export function Profile({ targetAddress }: ProfileProps) {
                 </div>
 
                 <button
-                  onClick={() => disconnectWallet()}
+                  onClick={() => disconnect()} // 🟢 Fixed to use unified disconnect
                   className="w-full flex items-center justify-center gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-500/20 transition-all font-bold"
                 >
                   <LogOut className="w-4 h-4" /> Disconnect

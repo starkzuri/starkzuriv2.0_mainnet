@@ -4,14 +4,12 @@ import { Sparkles, Users, Loader2, TrendingUp, Zap } from "lucide-react";
 import { Prediction } from "../types/prediction";
 import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
 import { motion, AnimatePresence } from "motion/react";
-// 🟢 1. Add these imports
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 import { toast } from "sonner";
 
 // 🟢 CONFIG
 const PAGE_SIZE = 5;
-// const API_URL = "https://starknet-indexer-apibara-d7ss.onrender.com";
-// Better to use env var so it works with your local server too:
+
 const API_URL =
   import.meta.env.VITE_INDEXER_SERVER_URL ||
   "https://starknet-indexer-apibara-mainnet.onrender.com";
@@ -24,7 +22,7 @@ type FeedTab = "for-you" | "active";
 
 export function HomeFeed({ onViewMarket }: HomeFeedProps) {
   // 🟢 2. Get Wallet Address for social actions
-  const { address } = useWallet();
+  const { address } = useAuth();
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [activeTab, setActiveTab] = useState<FeedTab>("for-you");

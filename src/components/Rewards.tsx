@@ -10,7 +10,7 @@ import {
   Star,
   Loader2,
 } from "lucide-react";
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 
 const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
 
@@ -89,7 +89,7 @@ interface RewardsProps {
 }
 
 export function Rewards({ onViewProfile }: RewardsProps) {
-  const { address } = useWallet();
+  const { address } = useAuth();
   const [activeTab, setActiveTab] = useState<RewardsTab>("overview");
   const [loading, setLoading] = useState(false);
 

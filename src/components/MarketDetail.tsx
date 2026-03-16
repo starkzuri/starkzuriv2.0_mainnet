@@ -21,7 +21,7 @@ import {
 import { Prediction, Comment } from "../types/prediction";
 import { mockComments } from "../data/mockData";
 import { useTrade } from "../hooks/useTrade";
-import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 import { ResolutionPanel } from "./ResolutionPanel"; // 🟢 Correctly Imported
 import { MediaPreview } from "./MediaPreview";
 import CommentsSection from "./CommentSection";
@@ -91,7 +91,7 @@ const calculatePayout = (investedAmount, price) => {
 // Calculate both sides in real-time based on the single 'amount' state
 
 export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
-  const { address } = useWallet();
+  const { address } = useAuth();
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [loading, setLoading] = useState(true);
 

@@ -2,7 +2,7 @@
 import { useCallback } from "react";
 import { CallData, uint256 } from "starknet";
 import { toast } from "sonner";
-import { useWallet } from "../context/WalletContext"; // 👈 USE YOUR CONTEXT
+import { useAuth } from "./useAuth";
 
 // 🔴 REPLACE WITH REAL ADDRESSES
 const HUB_ADDRESS = import.meta.env.VITE_HUB_ADDRESS;
@@ -10,11 +10,11 @@ const USDC_ADDRESS = import.meta.env.VITE_USDC_ADDRESS;
 
 export const useTrade = () => {
   // 🟢 CHANGE: Get account from your WalletContext, not starknet-react
-  const { account, address } = useWallet();
+  const { execute, address, isConnected } = useAuth();
 
   const buyShares = useCallback(
     async (marketId: string, isYes: boolean, amount: number) => {
-      if (!account || !address) {
+      if (!isConnected || !address) {
         toast.error("Please connect your wallet first!");
         return;
       }
@@ -49,7 +49,7 @@ export const useTrade = () => {
         console.log("🚀 Sending transaction...", calls);
 
         // 🟢 NOTE: starknetkit accounts act just like standard accounts
-        const { transaction_hash } = await account.execute(calls);
+        const { transaction_hash } = await execute(calls);
 
         console.log("✅ Tx Hash:", transaction_hash);
         toast.success("Transaction Sent!");
@@ -64,7 +64,7 @@ export const useTrade = () => {
         toast.error(msg);
       }
     },
-    [account, address],
+    [execute, address, isConnected],
   );
 
   return { buyShares };

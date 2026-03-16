@@ -15,6 +15,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../hooks/useAuth";
 import { MediaPreview } from "./MediaPreview";
 import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
 import { Prediction } from "../types/prediction";
@@ -44,7 +45,7 @@ interface PortfolioProps {
 }
 
 export function Portfolio({ onViewMarket }: PortfolioProps) {
-  const { address, connectWallet, account } = useWallet();
+  const { address, execute, isConnected, connect } = useAuth();
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -148,40 +149,7 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
   }, [address]);
 
   useEffect(() => {
-    if (!address || !account) return;
-
-    // const fetchBalance = async () => {
-    //   setBalanceLoading(true);
-    //   try {
-    //     const usdcAddress =
-    //       import.meta.env.VITE_USDC_ADDRESS ||
-    //       "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
-    //     console.log("usdc address", usdcAddress);
-    //     console.log("account", account);
-
-    //     const res = await account.callContract({
-    //       contractAddress: usdcAddress,
-    //       entrypoint: "balanceOf",
-    //       calldata: CallData.compile([address]),
-    //     });
-
-    //     const balanceStats = {
-    //       low: res[0],
-    //       high: res[1],
-    //     };
-
-    //     const balanceBN = uint256.uint256ToBN(balanceStats);
-    //     const balanceString = balanceBN.toString();
-    //     const formatted = Number(balanceString) / 1_000_000;
-
-    //     setUsdcBalance(formatted.toFixed(2));
-    //   } catch (e) {
-    //     console.error("Failed to fetch USDC balance", e);
-    //     setUsdcBalance("0.00");
-    //   } finally {
-    //     setBalanceLoading(false);
-    //   }
-    // };
+    if (!address || !isConnected) return;
 
     const fetchBalance = async () => {
       // We only need the address to check the balance, we don't need the account object anymore
@@ -227,38 +195,34 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
     fetchBalance();
     const interval = setInterval(fetchBalance, 10000);
     return () => clearInterval(interval);
-  }, [address, account]);
+  }, [address, isConnected]);
 
-  const handleClaim = async (marketId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!account) return;
+ const handleClaim = async (marketId: string, e: React.MouseEvent) => {
+  e.stopPropagation();
+  if (!isConnected) return;
 
-    setClaimingId(marketId);
-    try {
-      const tx = await account.execute({
-        contractAddress:
-          import.meta.env.VITE_HUB_ADDRESS ||
-          "0x530a3d485be7ba47ce511cf0da87d805a4d3de3d0828556ec74659d4018952f",
-        entrypoint: "claim_winnings",
-        calldata: CallData.compile([marketId]),
-      });
+  setClaimingId(marketId);
+  try {
+    const tx = await execute([{          // ✅ array, not object
+      contractAddress:
+        import.meta.env.VITE_HUB_ADDRESS ||
+        "0x530a3d485be7ba47ce511cf0da87d805a4d3de3d0828556ec74659d4018952f",
+      entrypoint: "claim_winnings",
+      calldata: CallData.compile([marketId]),
+    }]);
 
-      toast.success("Winnings Claimed!", {
-        description: "Transaction submitted. Your balance will update shortly.",
-      });
-
-      setPositions((prev) =>
-        prev.map((p) =>
-          p.marketId === marketId ? { ...p, hasClaimed: true } : p,
-        ),
-      );
-    } catch (err: any) {
-      console.error("Claim Error:", err);
-      toast.error("Claim Failed", { description: err.message });
-    } finally {
-      setClaimingId(null);
-    }
-  };
+    toast.success("Winnings Claimed!");
+    setPositions((prev) =>
+      prev.map((p) =>
+        p.marketId === marketId ? { ...p, hasClaimed: true } : p,
+      ),
+    );
+  } catch (err: any) {
+    toast.error("Claim Failed", { description: err.message });
+  } finally {
+    setClaimingId(null);
+  }
+};
 
   const getPositionStatus = (pos: UserPosition) => {
     if (pos.status === 1) return { type: "active", label: "Active" };
@@ -312,7 +276,7 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
             </p>
 
             <button
-              onClick={() => connectWallet()}
+             
               className="group relative bg-gradient-to-r from-[#1F87FC] to-[#1F87FC]/80 text-white px-8 py-3 rounded-xl font-bold transition-all hover:shadow-[0_0_30px_rgba(31,135,252,0.4)] hover:scale-105"
             >
               <span className="relative z-10">Connect Wallet</span>

@@ -1,21 +1,23 @@
+
+
 import { useState } from "react";
 import { Calendar, Tag, Loader2, LogIn } from "lucide-react";
-import { useWallet } from "../context/WalletContext";
 import { toast, Toaster } from "sonner";
 import { CallData, RpcProvider, byteArray } from "starknet";
-// 🟢 Import the new component
+
+// 🟢 1. Swapped to the unified God Hook
+import { useAuth } from "../hooks/useAuth"; 
 import { MediaUploader } from "./MediaUploader";
 
 export function CreatePrediction() {
-  const { account, address, connectWallet } = useWallet();
+  // 🟢 2. Pulling from useAuth instead of useWallet
+  const { execute, address, isConnected, connect } = useAuth();
 
   const [question, setQuestion] = useState("");
   const [category, setCategory] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // 🟢 NEW: Stores the real IPFS hash from Pinata
   const [mediaUrl, setMediaUrl] = useState<string>("");
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = [
@@ -30,13 +32,11 @@ export function CreatePrediction() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!account || !address) return;
+    if (!isConnected || !address) return;
 
     if (!question) return toast.error("Please enter a question");
     if (!category) return toast.error("Please select a category");
     if (!endDate) return toast.error("Please select an end date");
-
-    // 🟢 Validation: Ensure file is uploaded
     if (!mediaUrl) return toast.error("Please upload an image or video");
 
     setIsSubmitting(true);
@@ -44,37 +44,39 @@ export function CreatePrediction() {
     try {
       console.log("🚀 Initializing Reliable V3 Connection...");
 
-      // 1. SETUP ALCHEMY PROVIDER (Your Fix)
-      const alchemyProvider = new RpcProvider({
-        nodeUrl: "import.meta.env.VITE_NODE_URL",
-      });
+      // 🟢 3. Fixed Bug: Removed quotes so it reads the actual environment variable
+      
 
-      // 2. APPLY MONKEY PATCH 🩹
-      (account as any).provider = alchemyProvider;
 
-      // 3. DATA PREP
+      // DATA PREP
       const deadlineTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
 
-      // 🟢 REAL DATA: Use the IPFS Hash from Pinata
       const mediaByteArray = byteArray.byteArrayFromString(mediaUrl);
       const questionByteArray = byteArray.byteArrayFromString(question);
-      const categoryFelt = category; // Assuming contract takes short string or felt
+      const categoryFelt = category; 
 
       console.log("🚀 Sending Transaction with Media:", mediaUrl);
 
-      // 4. EXECUTE
-      const tx = await account.execute({
+      const myCall = {
+        
         contractAddress: import.meta.env.VITE_HUB_ADDRESS,
         entrypoint: "create_market",
         calldata: CallData.compile([
-          questionByteArray, // question (ByteArray)
-          mediaByteArray, // media_uri (ByteArray) - 🟢 Now Real!
-          deadlineTimestamp, // deadline (u64)
-          categoryFelt, // category (felt252)
+          questionByteArray, 
+          mediaByteArray, 
+          deadlineTimestamp, 
+          categoryFelt, 
         ]),
-      });
+      
+      }
 
-      console.log("✅ Tx Hash:", tx.transaction_hash);
+      console.log("payload ", myCall);
+
+      // EXECUTE
+      const tx = await execute([myCall]);
+      console.log(tx)
+
+      // console.log("✅ Tx Hash:", tx.transaction_hash);
 
       toast.success("Transaction Sent!", {
         description: "Market creation is processing...",
@@ -91,7 +93,7 @@ export function CreatePrediction() {
       // Reset Form
       setQuestion("");
       setEndDate("");
-      setMediaUrl(""); // Clear media state
+      setMediaUrl(""); 
     } catch (err: any) {
       console.error("TRANSACTION FAILED:", err);
       toast.error("Failed", { description: err.message });
@@ -100,7 +102,8 @@ export function CreatePrediction() {
     }
   };
 
-  if (!account) {
+  // 🟢 4. UI Guard now respects Privy users too!
+  if (!isConnected) {
     return (
       <div className="w-full max-w-2xl mx-auto px-4 py-6">
         <div className="bg-[#0f0f1a] border border-[#1F87FC]/30 rounded-xl p-12 text-center flex flex-col items-center">
@@ -114,7 +117,7 @@ export function CreatePrediction() {
             You need to connect your wallet to publish new markets.
           </p>
           <button
-            onClick={() => connectWallet()}
+            onClick={() => connect("web3")} // 🟢 Updated to use unified connect function
             className="flex items-center gap-2 px-8 py-4 bg-[#1F87FC] text-white rounded-lg hover:shadow-[0_0_30px_rgba(31,135,252,0.5)] transition-all font-medium"
           >
             <LogIn className="w-5 h-5" />
@@ -130,14 +133,14 @@ export function CreatePrediction() {
       <Toaster
         position="top-right"
         richColors
-        theme="dark" // or "light" depending on your theme
+        theme="dark" 
       />
       <div className="bg-[#0f0f1a] border border-[#1F87FC]/30 rounded-xl p-6">
         <h2 className="text-foreground mb-6 text-xl font-bold">
           Create Prediction
         </h2>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* 🟢 MEDIA UPLOAD SECTION */}
+          {/* MEDIA UPLOAD SECTION */}
           <div className="space-y-3">
             <label className="text-foreground text-sm font-medium">
               Upload Media
@@ -212,7 +215,7 @@ export function CreatePrediction() {
           {/* SUBMIT BUTTON */}
           <button
             type="submit"
-            disabled={isSubmitting || !mediaUrl} // Disable if no media
+            disabled={isSubmitting || !mediaUrl}
             className={`w-full py-4 rounded-lg flex items-center justify-center font-medium transition-all ${
               isSubmitting || !mediaUrl
                 ? "bg-gray-800 text-gray-500 cursor-not-allowed"
