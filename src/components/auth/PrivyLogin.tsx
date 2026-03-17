@@ -1,8 +1,15 @@
+
+// PrivyLogin.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAuth } from "../../hooks/useAuth";
+import { Key } from "lucide-react";
 
-export function PrivyLogin() {
+interface PrivyLoginProps {
+  variant?: "default" | "nav";
+}
+
+export function PrivyLogin({ variant = "default" }: PrivyLoginProps) {
   const { connect, isConnecting } = useAuth();
   const { login, authenticated, ready, getAccessToken } = usePrivy();
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +44,29 @@ export function PrivyLogin() {
     }
   };
 
+  // ── Nav-item variant ──────────────────────────────────────────────────
+  if (variant === "nav") {
+    return (
+      <button
+        onClick={handleLogin}
+        disabled={isConnecting || !ready}
+        className={`flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all
+          ${isConnecting || !ready
+            ? "opacity-50 cursor-not-allowed text-muted-foreground"
+            : "text-[#1F87FC]"
+          }`}
+      >
+        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#a855f7] to-[#1F87FC] flex items-center justify-center drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]">
+          <Key className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="text-xs">
+          {isConnecting ? "..." : "Privy"}
+        </span>
+      </button>
+    );
+  }
+
+  // ── Default full-width variant ────────────────────────────────────────
   return (
     <>
       <button
@@ -59,7 +89,6 @@ export function PrivyLogin() {
           alignItems: "center",
           gap: 12,
           transition: "background 0.2s, border-color 0.2s",
-          position: "relative",
         }}
         onMouseEnter={e => {
           if (isConnecting || !ready) return;
@@ -73,24 +102,16 @@ export function PrivyLogin() {
           btn.style.borderColor = "rgba(255, 255, 255, 0.12)";
         }}
       >
-        {/* Icon container — same pill style as social login buttons */}
         <span style={{
-          width: 32,
-          height: 32,
-          borderRadius: "8px",
+          width: 32, height: 32, borderRadius: "8px",
           background: "rgba(255,255,255,0.1)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="2" y="4" width="20" height="16" rx="3" stroke="white" strokeWidth="1.8"/>
             <path d="M2 8l9.293 5.707a1 1 0 001.414 0L22 8" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
           </svg>
         </span>
-
-        {/* Label — centered in remaining space */}
         <span style={{ flex: 1, textAlign: "center", marginRight: 32 }}>
           {isConnecting ? "Connecting..." : "Connect Privy"}
         </span>
