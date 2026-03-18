@@ -66,7 +66,6 @@ export function SellSharesPanel({
     try {
       await sellShares(marketId, isYes, rawToSell.toString());
       isYes ? setYesAmount("") : setNoAmount("");
-      toast.success(`${side} shares sold!`);
     } catch (err: any) {
       toast.error(err?.message || "Transaction failed");
     } finally {
