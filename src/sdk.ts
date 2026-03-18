@@ -12,7 +12,8 @@ export function createSDK(chainId: ChainId): StarkSDK {
   if (!network) throw new Error(`Unsupported network: ${key}`);
 
   // Use relative URL so Vite proxy forwards to the backend
-  const paymasterNodeUrl = import.meta.env.VITE_PRIVY_SERVER_URL;
+  const paymasterNodeUrl =
+    import.meta.env.VITE_PRIVY_SERVER_URL + "/api/paymaster";
 
   const sdk = new StarkSDK({
     rpcUrl: network.rpcUrl,
