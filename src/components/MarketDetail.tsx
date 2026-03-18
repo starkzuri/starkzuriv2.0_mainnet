@@ -25,6 +25,7 @@ import { useAuth } from "../hooks/useAuth";
 import { ResolutionPanel } from "./ResolutionPanel"; // 🟢 Correctly Imported
 import { MediaPreview } from "./MediaPreview";
 import CommentsSection from "./CommentSection";
+import { SellSharesPanel } from "./subcomponents/SellSharesPanel";
 import { toast, Toaster } from "sonner";
 
 interface MarketDetailProps {
@@ -273,24 +274,6 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
     return "Just now";
   };
 
-  const handlePostComment = () => {
-    if (!commentText.trim()) return;
-    const newComment: Comment = {
-      id: `c${Date.now()}`,
-      user: {
-        name: "You",
-        username: "@you",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=You",
-      },
-      text: commentText,
-      timestamp: new Date().toISOString(),
-      likes: 0,
-      isLiked: false,
-    };
-    setComments([newComment, ...comments]);
-    setCommentText("");
-  };
-
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -411,106 +394,237 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
 
           {/* 🟢 CONDITIONAL RENDER: TRADING VS RESOLUTION */}
           {isMarketActive ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* YES CARD */}
-              <div className="bg-[#1a1a24] border border-[#00ff88]/30 rounded-lg p-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[#00ff88] font-bold">YES</span>
-                    <span className="text-2xl">
+            <div className="space-y-4">
+              {/* Buy cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-1">
+                {/* YES CARD */}
+                <div
+                  className="bg-[#1a1a24] rounded-lg p-4 flex flex-col gap-3"
+                  style={{ border: "1px solid #00ff8830" }}
+                >
+                  {/* Title row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp
+                        className="w-4 h-4"
+                        style={{ color: "#00ff88" }}
+                      />
+                      <span
+                        className="font-bold text-sm"
+                        style={{ color: "#00ff88" }}
+                      >
+                        YES
+                      </span>
+                    </div>
+                    <span
+                      className="text-xs text-muted-foreground px-2 py-0.5 rounded-full font-mono"
+                      style={{
+                        background: "#00ff8815",
+                        border: "1px solid #00ff8825",
+                      }}
+                    >
                       ${prediction.yesPrice.toFixed(4)}
                     </span>
                   </div>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Amount (USDC)"
-                    className="w-full bg-black/50 border border-[#00ff88]/30 rounded p-2 mb-2 text-white focus:outline-none focus:border-[#00ff88]"
-                  />
 
-                  {/* 🟢 NEW: Real-time Winnings Display */}
-                  <div className="mb-3 text-sm text-gray-400">
+                  {/* Input */}
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="Amount (USDC)"
+                      className="w-full bg-black/50 rounded-lg py-2.5 px-2 pl-3 pr-14 text-white text-sm
+                 focus:outline-none transition-colors"
+                      style={{ border: "1px solid #00ff8830" }}
+                      onFocus={(e) =>
+                        (e.currentTarget.style.borderColor = "#00ff88")
+                      }
+                      onBlur={(e) =>
+                        (e.currentTarget.style.borderColor = "#00ff8830")
+                      }
+                    />
+                    <div
+                      className="absolute right-0 top-0 bottom-0 flex items-center"
+                      style={{ borderLeft: "1px solid #00ff8820" }}
+                    >
+                      <span className="px-2 text-xs text-muted-foreground">
+                        USDC
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Payout estimate */}
+                  <div className="min-h-[44px]">
                     {yesData ? (
-                      <div className="flex justify-between items-center bg-[#00ff88]/10 p-2 rounded border border-[#00ff88]/20">
-                        <span>Potential Payout:</span>
+                      <div
+                        className="flex justify-between items-center rounded-lg p-2.5 text-sm"
+                        style={{
+                          background: "#00ff8810",
+                          border: "1px solid #00ff8820",
+                        }}
+                      >
+                        <span className="text-muted-foreground text-xs">
+                          Potential Payout
+                        </span>
                         <div className="text-right">
-                          <span className="text-white block font-mono">
+                          <span className="text-white font-mono block">
                             ${yesData.payout}
                           </span>
-                          <span className="text-[#00ff88] text-xs">
+                          <span
+                            className="text-[10px]"
+                            style={{ color: "#00ff88" }}
+                          >
                             +{yesData.profit} ({yesData.roi}%)
                           </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="p-2 text-xs opacity-50">
+                      <div className="text-xs text-muted-foreground/50 p-2 text-center">
                         Enter amount to see returns
                       </div>
                     )}
                   </div>
+
+                  {/* Buy button */}
+                  <button
+                    onClick={() => handleTrade(true)}
+                    className="w-full py-2.5 rounded-lg font-bold text-sm transition-all"
+                    style={{
+                      background: "#00ff88",
+                      color: "#000",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#00ff88cc")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "#00ff88")
+                    }
+                  >
+                    Buy YES
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => handleTrade(true)}
-                  className="w-full bg-[#00ff88] text-black py-2 rounded font-bold hover:bg-[#00ff88]/90 transition-colors"
+                {/* NO CARD */}
+                <div
+                  className="bg-[#1a1a24] rounded-lg p-4 flex flex-col gap-3"
+                  style={{ border: "1px solid #ff336630" }}
                 >
-                  Buy YES
-                </button>
-              </div>
-
-              {/* NO CARD */}
-              <div className="bg-[#1a1a24] border border-[#ff3366]/30 rounded-lg p-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[#ff3366] font-bold">NO</span>
-                    <span className="text-2xl">
+                  {/* Title row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown
+                        className="w-4 h-4"
+                        style={{ color: "#ff3366" }}
+                      />
+                      <span
+                        className="font-bold text-sm"
+                        style={{ color: "#ff3366" }}
+                      >
+                        NO
+                      </span>
+                    </div>
+                    <span
+                      className="text-xs text-muted-foreground px-2 py-0.5 rounded-full font-mono"
+                      style={{
+                        background: "#ff336615",
+                        border: "1px solid #ff336625",
+                      }}
+                    >
                       ${prediction.noPrice.toFixed(4)}
                     </span>
                   </div>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Amount (USDC)"
-                    className="w-full bg-black/50 border border-[#ff3366]/30 rounded p-2 mb-2 text-white focus:outline-none focus:border-[#ff3366]"
-                  />
 
-                  {/* 🔴 NEW: Real-time Winnings Display */}
-                  <div className="mb-3 text-sm text-gray-400">
+                  {/* Input */}
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="Amount (USDC)"
+                      className="w-full bg-black/50 px-2 rounded-lg py-2.5 pl-3 pr-14 text-white text-sm
+                 focus:outline-none transition-colors"
+                      style={{ border: "1px solid #ff336630" }}
+                      onFocus={(e) =>
+                        (e.currentTarget.style.borderColor = "#ff3366")
+                      }
+                      onBlur={(e) =>
+                        (e.currentTarget.style.borderColor = "#ff336630")
+                      }
+                    />
+                    <div
+                      className="absolute right-0 top-0 bottom-0 flex items-center"
+                      style={{ borderLeft: "1px solid #ff336620" }}
+                    >
+                      <span className="px-2 text-xs text-muted-foreground">
+                        USDC
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Payout estimate */}
+                  <div className="min-h-[44px]">
                     {noData ? (
-                      <div className="flex justify-between items-center bg-[#ff3366]/10 p-2 rounded border border-[#ff3366]/20">
-                        <span>Potential Payout:</span>
+                      <div
+                        className="flex justify-between items-center rounded-lg p-2.5 text-sm"
+                        style={{
+                          background: "#ff336610",
+                          border: "1px solid #ff336620",
+                        }}
+                      >
+                        <span className="text-muted-foreground text-xs">
+                          Potential Payout
+                        </span>
                         <div className="text-right">
-                          <span className="text-white block font-mono">
+                          <span className="text-white font-mono block">
                             ${noData.payout}
                           </span>
-                          <span className="text-[#ff3366] text-xs">
+                          <span
+                            className="text-[10px]"
+                            style={{ color: "#ff3366" }}
+                          >
                             +{noData.profit} ({noData.roi}%)
                           </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="p-2 text-xs opacity-50">
+                      <div className="text-xs text-muted-foreground/50 p-2 text-center">
                         Enter amount to see returns
                       </div>
                     )}
                   </div>
-                </div>
 
-                <button
-                  onClick={() => handleTrade(false)}
-                  className="w-full bg-[#ff3366] text-white py-2 rounded font-bold hover:bg-[#ff3366]/90 transition-colors"
-                >
-                  Buy NO
-                </button>
+                  {/* Buy button */}
+                  <button
+                    onClick={() => handleTrade(false)}
+                    className="w-full py-2.5 rounded-lg font-bold text-sm transition-all"
+                    style={{
+                      background: "#ff3366",
+                      color: "#fff",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#ff3366cc")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "#ff3366")
+                    }
+                  >
+                    Buy NO
+                  </button>
+                </div>
               </div>
+
+              {/* Sell panel — full width, SellSharesPanel self-hides when no shares */}
+              <SellSharesPanel
+                marketId={marketId}
+                myShares={myShares}
+                yesPrice={prediction.yesPrice}
+                noPrice={prediction.noPrice}
+              />
             </div>
           ) : (
-            // --- 🟢 NEW: RESOLUTION PANEL ---
             <ResolutionPanel
               marketId={marketId}
-              // We need the raw creator address for permissions (0x...), not the "User 123" formatted one
               creatorAddress={apiData?.creator || ""}
               status={apiData?.status || 1}
               outcome={apiData?.outcome}

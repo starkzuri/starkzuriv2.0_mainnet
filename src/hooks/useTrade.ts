@@ -66,6 +66,57 @@ export const useTrade = () => {
     },
     [execute, address, isConnected],
   );
+  const sellShares = useCallback(
+    // 🟢 1. Accept either a string or a number from the UI
+    async (marketId: string, isYes: boolean, amountToSell: string | number) => {
+      console.log(
+        "marketid ",
+        marketId,
+        "isyes ",
+        isYes,
+        "amount to sell",
+        amountToSell,
+      );
+      if (!isConnected || !address) {
+        toast.error("Please connect your wallet first!");
+        return;
+      }
 
-  return { buyShares };
+      try {
+        toast.loading("Preparing sell transaction...");
+
+        // ✅ Shares from the contract are already raw integers — just pass them directly.
+        // Never multiply by 10^18 or 10^6. The contract stored them as-is.
+        const finalBigIntAmount = BigInt(amountToSell.toString().split(".")[0]);
+        const uintAmount = uint256.bnToUint256(finalBigIntAmount);
+        // console.log(uintAmount);
+
+        const calls = [
+          {
+            contractAddress: HUB_ADDRESS,
+            entrypoint: "sell_shares",
+            calldata: CallData.compile({
+              market_id: marketId,
+              is_yes: isYes ? 1 : 0,
+              share_amount: uintAmount,
+            }),
+          },
+        ];
+
+        const { transaction_hash } = await execute(calls);
+        toast.success("Shares sold successfully!");
+        return transaction_hash;
+      } catch (error: any) {
+        console.error("❌ Sell Failed:", error);
+        const msg = error.message?.includes("User rejected")
+          ? "Transaction rejected by user"
+          : error.message?.includes("Insufficient")
+            ? "Insufficient shares to sell"
+            : "Sell failed. Check console.";
+        toast.error(msg);
+      }
+    },
+    [execute, address, isConnected],
+  );
+  return { buyShares, sellShares };
 };
