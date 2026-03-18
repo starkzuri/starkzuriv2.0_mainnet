@@ -18,6 +18,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { PriceChart } from "./subcomponents/PriceChart";
 import { Prediction, Comment } from "../types/prediction";
 import { mockComments } from "../data/mockData";
 import { useTrade } from "../hooks/useTrade";
@@ -51,6 +52,31 @@ interface ApiMarket {
   status?: number;
   outcome?: boolean;
   proposalTimestamp?: number;
+}
+
+function aggregateChartData(rawData: any[], bucketCount = 60) {
+  if (!rawData || rawData.length === 0) return [];
+  if (rawData.length <= bucketCount) return rawData;
+
+  const minTime = rawData[0].timestamp;
+  const maxTime = rawData[rawData.length - 1].timestamp;
+  const bucketSize = (maxTime - minTime) / bucketCount;
+
+  const buckets: Record<number, { yesPrice: number[]; noPrice: number[] }> = {};
+
+  for (const point of rawData) {
+    const bucketIndex = Math.floor((point.timestamp - minTime) / bucketSize);
+    if (!buckets[bucketIndex])
+      buckets[bucketIndex] = { yesPrice: [], noPrice: [] };
+    buckets[bucketIndex].yesPrice.push(point.yesPrice);
+    buckets[bucketIndex].noPrice.push(point.noPrice);
+  }
+
+  return Object.entries(buckets).map(([index, data]) => ({
+    timestamp: minTime + Number(index) * bucketSize,
+    yesPrice: data.yesPrice.reduce((a, b) => a + b, 0) / data.yesPrice.length,
+    noPrice: data.noPrice.reduce((a, b) => a + b, 0) / data.noPrice.length,
+  }));
 }
 
 const formatAddress = (addr: string) => {
@@ -117,7 +143,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const [comments, setComments] = useState<Comment[]>([]);
 
   const API_URL = "https://starknet-indexer-apibara-mainnet-19ew.onrender.com";
-  console.log("my shares ", myShares);
+  // console.log("my shares ", myShares);
   // 1. Fetch Market Data & History
   // 1. Fetch Market Data & History (Optimized)
   useEffect(() => {
@@ -134,7 +160,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
         }
 
         const rawMarket: ApiMarket = await res.json();
-        console.log("rawMarket felabs", rawMarket);
+        // console.log("rawMarket felabs", rawMarket);
 
         if (rawMarket) {
           setApiData(rawMarket); // Store raw data for resolution panel
@@ -188,12 +214,21 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
         );
         if (historyRes.ok) {
           const historyData = await historyRes.json();
-          const formattedHistory = historyData.map((item: any) => ({
-            ...item,
-            timestamp: item.timestamp * 1000,
-            yesPrice: Number(item.yesPrice),
-            noPrice: Number(item.noPrice),
-          }));
+          const formattedHistory = historyData
+            .map((item: any) => ({
+              ...item,
+              timestamp: item.timestamp * 1000,
+              yesPrice: Number(item.yesPrice),
+              noPrice: Number(item.noPrice),
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp) // 👈 sort ascending
+            .filter(
+              (
+                item,
+                index,
+                arr, // 👈 deduplicate same-second trades
+              ) => index === 0 || item.timestamp !== arr[index - 1].timestamp,
+            );
           setChartData(formattedHistory);
         }
 
@@ -246,7 +281,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
       <div className="p-10 text-center text-red-500">Market not found</div>
     );
 
-  console.log("prediction ", prediction);
+  // console.log("prediction ", prediction);
 
   const getTimeRemaining = () => {
     const now = new Date();
@@ -308,7 +343,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
     new Date(prediction.endsAt) > new Date() &&
     (apiData?.status === 1 || !apiData?.status);
 
-  console.log("prediction ends ", prediction.endsAt);
+  // console.log("prediction ends ", prediction.endsAt);
 
   const yesData = calculatePayout(amount, prediction.yesPrice);
   const noData = calculatePayout(amount, prediction.noPrice);
@@ -635,165 +670,13 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
 
           {/* Price Chart */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between"></div>
+
+            <div className="space-y-3">
               <h3 className="text-foreground text-sm md:text-base">
                 Price History
               </h3>
-              <div className="flex gap-1.5 md:gap-2">
-                <button
-                  onClick={() => setActiveChart("both")}
-                  className={`px-2 py-1 rounded text-xs ${
-                    activeChart === "both"
-                      ? "bg-[#1F87FC]/20 text-[#1F87FC]"
-                      : "border border-border text-muted-foreground"
-                  }`}
-                >
-                  Both
-                </button>
-                <button
-                  onClick={() => setActiveChart("yes")}
-                  className={`px-2 py-1 rounded text-xs ${
-                    activeChart === "yes"
-                      ? "bg-[#00ff88]/20 text-[#00ff88]"
-                      : "border border-border text-muted-foreground"
-                  }`}
-                >
-                  YES
-                </button>
-                <button
-                  onClick={() => setActiveChart("no")}
-                  className={`px-2 py-1 rounded text-xs ${
-                    activeChart === "no"
-                      ? "bg-[#ff3366]/20 text-[#ff3366]"
-                      : "border border-border text-muted-foreground"
-                  }`}
-                >
-                  NO
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-[#1a1a24] border border-border rounded-lg p-2 md:p-4">
-              <ResponsiveContainer width="100%" height={250}>
-                {/* <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorYes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorNo" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ff3366" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ff3366" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(31, 135, 252, 0.1)"
-                  />
-                  <XAxis
-                    dataKey="timestamp"
-                    stroke="#6b6b7f"
-                    tick={{ fill: "#6b6b7f", fontSize: 12 }}
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    }
-                  />
-                  <YAxis
-                    stroke="#6b6b7f"
-                    tick={{ fill: "#6b6b7f", fontSize: 12 }}
-                    domain={[0, 1]}
-                    tickFormatter={(value) => `$${value.toFixed(2)}`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  {(activeChart === "both" || activeChart === "yes") && (
-                    <Area
-                      type="monotone"
-                      dataKey="yesPrice"
-                      stroke="#00ff88"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorYes)"
-                      name="YES"
-                    />
-                  )}
-                  {(activeChart === "both" || activeChart === "no") && (
-                    <Area
-                      type="monotone"
-                      dataKey="noPrice"
-                      stroke="#ff3366"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorNo)"
-                      name="NO"
-                    />
-                  )}
-                </AreaChart> */}
-
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorYes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorNo" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ff3366" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ff3366" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(31, 135, 252, 0.1)"
-                  />
-                  <XAxis
-                    dataKey="timestamp"
-                    stroke="#6b6b7f"
-                    tick={{ fill: "#6b6b7f", fontSize: 12 }}
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    }
-                  />
-                  {/* 🟢 FIXED Y-AXIS */}
-                  <YAxis
-                    stroke="#6b6b7f"
-                    tick={{ fill: "#6b6b7f", fontSize: 12 }}
-                    // This zooms the chart in to fit the data boundaries
-                    domain={["auto", "auto"]}
-                    tickFormatter={(value) => `$${value.toFixed(4)}`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  {(activeChart === "both" || activeChart === "yes") && (
-                    <Area
-                      type="monotone"
-                      dataKey="yesPrice"
-                      stroke="#00ff88"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorYes)"
-                      name="YES"
-                      // 🟢 OPTIONAL: Add dots so you can see individual trades clearly
-                      activeDot={{ r: 6 }}
-                    />
-                  )}
-                  {(activeChart === "both" || activeChart === "no") && (
-                    <Area
-                      type="monotone"
-                      dataKey="noPrice"
-                      stroke="#ff3366"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorNo)"
-                      name="NO"
-                      activeDot={{ r: 6 }}
-                    />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
+              <PriceChart data={chartData} />
             </div>
           </div>
 
