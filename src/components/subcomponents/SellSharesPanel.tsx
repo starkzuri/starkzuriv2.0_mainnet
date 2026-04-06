@@ -169,7 +169,7 @@ export function SellSharesPanel({
               <span className="text-muted-foreground text-xs">Est. payout</span>
               <div className="text-right">
                 <span className="text-white font-mono block">
-                  {`$${(estimate.payout * 0.95).toFixed(4)}`}
+                  {`$${(estimate.payout * 1).toFixed(4)}`}
                 </span>
                 <span className="text-[10px]" style={{ color }}>
                   @ ${estimate.perShare} / share
