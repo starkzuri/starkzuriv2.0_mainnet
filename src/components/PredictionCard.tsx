@@ -2,29 +2,75 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
+  Share2,
   Clock,
-  Sparkles,
   TrendingUp,
   Award,
-  Flame,
-  Zap,
-  Share2, // 🟢 1. Import Share Icon
 } from "lucide-react";
 import { Prediction } from "../types/prediction";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { MediaPreview } from "./MediaPreview";
-import { toast } from "sonner"; // 🟢 2. Import Toast for feedback
+import { toast } from "sonner";
 
 interface PredictionCardProps {
   prediction: Prediction;
   onLike?: (id: string) => void;
   onComment?: (id: string) => void;
   onRepost?: (id: string) => void;
-  onBuyYes?: (id: string) => void;
-  onBuyNo?: (id: string) => void;
   onClick?: (id: string) => void;
 }
+
+const getStage = (progress: number) => {
+  if (progress >= 80) return "critical";
+  if (progress >= 60) return "urgent";
+  if (progress >= 40) return "hot";
+  if (progress >= 20) return "building";
+  return "live";
+};
+
+const stageConfig = {
+  live: {
+    from: "#1F87FC",
+    to: "#38bdf8",
+    tip: "#1F87FC",
+    speed: "2s",
+    label: "Live",
+    pulse: false,
+  },
+  building: {
+    from: "#6366f1",
+    to: "#818cf8",
+    tip: "#818cf8",
+    speed: "1.6s",
+    label: "Building",
+    pulse: false,
+  },
+  hot: {
+    from: "#9333ea",
+    to: "#e879f9",
+    tip: "#e879f9",
+    speed: "1.1s",
+    label: "Hot",
+    pulse: false,
+  },
+  urgent: {
+    from: "#ea580c",
+    to: "#fbbf24",
+    tip: "#fbbf24",
+    speed: "0.7s",
+    label: "Urgent",
+    pulse: true,
+  },
+  critical: {
+    from: "#dc2626",
+    to: "#ff3366",
+    tip: "#ff3366",
+    speed: "0.38s",
+    label: "Critical",
+    pulse: true,
+  },
+};
 
 export function PredictionCard({
   prediction,
@@ -33,679 +79,671 @@ export function PredictionCard({
   onRepost,
   onClick,
 }: PredictionCardProps) {
-  const [showLikeAnimation, setShowLikeAnimation] = useState(false);
-  const [particles, setParticles] = useState<
-    { id: number; x: number; y: number }[]
-  >([]);
   const [, setTick] = useState(0);
 
-  // Force re-render every second to update progress
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTick((prev) => prev + 1);
-    }, 1000);
-
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
   const getTimeRemaining = () => {
-    const now = new Date();
-    const end = new Date(prediction.endsAt);
-    const diff = end.getTime() - now.getTime();
-
+    const diff = new Date(prediction.endsAt).getTime() - Date.now();
     if (diff <= 0) return "Ended";
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
     if (days > 0) return `${days}d ${hours}h`;
     return `${hours}h`;
   };
 
+  const getTimeProgress = () => {
+    const now = Date.now();
+    const start = new Date(prediction.createdAt).getTime();
+    const end = new Date(prediction.endsAt).getTime();
+    return Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100);
+  };
+
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
     return num.toString();
   };
 
-  // 🟢 3. NEW SHARE HANDLER
   const handleShare = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Stop card click
-
-    // Construct the deep link
-    // Result: http://localhost:3000/?marketId=123
+    e.stopPropagation();
     const shareUrl = `${window.location.origin}/?marketId=${prediction.id}`;
-
-    // Try Native Share (Mobile)
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: "StarkZuri Prediction",
-          // text: ... ❌ REMOVED (This stops the description from appearing)
-          url: shareUrl,
-        });
+        await navigator.share({ title: "StarkZuri Prediction", url: shareUrl });
         return;
-      } catch (err) {
-        console.log("Native share skipped");
-      }
+      } catch {}
     }
-
-    // Fallback: Copy to Clipboard
     try {
       await navigator.clipboard.writeText(shareUrl);
       toast.success("Link copied!", {
         description: "Market link ready to share.",
         icon: <Share2 className="w-4 h-4 text-[#1F87FC]" />,
       });
-    } catch (err) {
+    } catch {
       toast.error("Failed to copy link");
     }
   };
 
-  const handleLike = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowLikeAnimation(true);
-    setTimeout(() => setShowLikeAnimation(false), 1000);
-    // console.log(prediction);
-
-    // Create particles effect
-    const newParticles = Array.from({ length: 8 }, (_, i) => ({
-      id: Date.now() + i,
-      x: Math.random() * 100 - 50,
-      y: Math.random() * 100 - 50,
-    }));
-    setParticles(newParticles);
-    setTimeout(() => setParticles([]), 1000);
-
-    onLike?.(prediction.id);
-  };
-
-  const handleBuy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClick?.(prediction.id); // Navigate to Market Detail
-  };
-
-  // Calculate progress (time elapsed)
-  const getTimeProgress = () => {
-    const now = new Date().getTime();
-    const start = new Date(prediction.createdAt).getTime();
-    const end = new Date(prediction.endsAt).getTime();
-    const progress = ((now - start) / (end - start)) * 100;
-    const finalProgress = Math.min(Math.max(progress, 0), 100);
-    return finalProgress;
-  };
-
-  // Helper to check if market is complete
-  const isMarketComplete = () => {
-    return getTimeRemaining() === "Ended" || getTimeProgress() >= 100;
-  };
-
-  // 🎮 GAMIFIED INTERVAL SYSTEM - Returns intensity level based on 20% intervals
-  const getProgressInterval = () => {
-    const progress = getTimeProgress();
-    if (progress >= 100) return 5; // 100%: Complete
-    if (progress >= 80) return 4; // 80-100%: CRITICAL
-    if (progress >= 60) return 3; // 60-80%: High stakes
-    if (progress >= 40) return 2; // 40-60%: Getting serious
-    if (progress >= 20) return 1; // 20-40%: Warming up
-    return 0; // 0-20%: Chill
-  };
-
-  // 🎨 Get theme based on interval
-  const getIntervalTheme = () => {
-    const interval = getProgressInterval();
-    const themes = {
-      0: {
-        gradient: "from-[#1F87FC] via-blue-400 to-cyan-400",
-        glow: "rgba(31, 135, 252, 0.5)",
-        text: "text-[#1F87FC]",
-        label: "Just Started",
-        emoji: "🎯",
-        shimmerSpeed: 3,
-        pulseSpeed: 0,
-      },
-      1: {
-        gradient: "from-[#1F87FC] via-blue-500 to-purple-400",
-        glow: "rgba(31, 135, 252, 0.6)",
-        text: "text-blue-400",
-        label: "Building Momentum",
-        emoji: "⚡",
-        shimmerSpeed: 2.5,
-        pulseSpeed: 0,
-      },
-      2: {
-        gradient: "from-purple-500 via-pink-500 to-purple-600",
-        glow: "rgba(168, 85, 247, 0.6)",
-        text: "text-purple-400",
-        label: "Heating Up",
-        emoji: "🔥",
-        shimmerSpeed: 2,
-        pulseSpeed: 2,
-      },
-      3: {
-        gradient: "from-orange-500 via-red-500 to-orange-600",
-        glow: "rgba(249, 115, 22, 0.7)",
-        text: "text-orange-400",
-        label: "High Stakes",
-        emoji: "🚨",
-        shimmerSpeed: 1.5,
-        pulseSpeed: 1.5,
-      },
-      4: {
-        gradient: "from-red-600 via-red-500 to-red-600",
-        glow: "rgba(220, 38, 38, 0.8)",
-        text: "text-red-400",
-        label: "FINAL PUSH",
-        emoji: "💥",
-        shimmerSpeed: 0.8,
-        pulseSpeed: 1,
-      },
-      5: {
-        gradient: "from-gray-500 via-gray-600 to-gray-500",
-        glow: "none",
-        text: "text-gray-400",
-        label: "Market Closed",
-        emoji: "🏁",
-        shimmerSpeed: 0,
-        pulseSpeed: 0,
-      },
-    };
-    return themes[interval as keyof typeof themes] || themes[0];
-  };
-
-  const theme = getIntervalTheme();
-  const interval = getProgressInterval();
+  const marketComplete = getTimeRemaining() === "Ended";
   const timeProgress = getTimeProgress();
-  const marketComplete = isMarketComplete();
+  const yesPercent = Math.round(prediction.yesPrice * 100);
+  const noPercent = Math.round(prediction.noPrice * 100);
 
   return (
     <motion.div
-      className="bg-[#0f0f1a] border border-[#1F87FC]/30 rounded-xl overflow-hidden transition-all duration-300 hover:border-[#1F87FC]/60 hover:shadow-[0_0_20px_rgba(31,135,252,0.3)] cursor-pointer relative group"
       onClick={() => onClick?.(prediction.id)}
-      whileHover={{ y: -4 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      whileHover={{ y: -3, boxShadow: "0 0 28px rgba(31,135,252,0.12)" }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      style={{
+        background: "#12121f",
+        border: "1px solid rgba(31,135,252,0.22)",
+        borderRadius: 18,
+        overflow: "hidden",
+        cursor: "pointer",
+        fontFamily: "inherit",
+      }}
+      className="group hover:border-[rgba(31,135,252,0.5)] transition-[border-color] duration-300"
     >
-      {/* ... (Existing Animation Overlays & Header Code remains same) ... */}
-      {/* Animated Glow Effect */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-[#1F87FC]/0 via-[#1F87FC]/10 to-[#1F87FC]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-        animate={{
-          x: ["-100%", "100%"],
+      {/* ── Top bar ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "14px 16px 10px",
         }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          repeatDelay: 3,
-        }}
-      />
-
-      {/* 🎮 ADRENALINE BORDER PULSE - Intensifies by interval */}
-      {!marketComplete && interval >= 2 && (
-        <motion.div
-          className="absolute inset-0 rounded-xl pointer-events-none z-0"
-          animate={{
-            boxShadow: [
-              `0 0 0px ${interval >= 4 ? "rgba(220, 38, 38, 0)" : interval >= 3 ? "rgba(249, 115, 22, 0)" : "rgba(168, 85, 247, 0)"}`,
-              `0 0 ${interval >= 4 ? "30px" : interval >= 3 ? "25px" : "20px"} ${interval >= 4 ? "rgba(220, 38, 38, 0.4)" : interval >= 3 ? "rgba(249, 115, 22, 0.4)" : "rgba(168, 85, 247, 0.4)"}`,
-              `0 0 0px ${interval >= 4 ? "rgba(220, 38, 38, 0)" : interval >= 3 ? "rgba(249, 115, 22, 0)" : "rgba(168, 85, 247, 0)"}`,
-            ],
-          }}
-          transition={{
-            duration: interval >= 4 ? 0.6 : interval >= 3 ? 1 : 1.5,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      )}
-
-      {/* Like Animation Overlay with Particles */}
-      <AnimatePresence>
-        {showLikeAnimation && (
-          <>
-            <motion.div
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.5 }}
-              transition={{ duration: 0.5 }}
-              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none"
-            >
-              <Heart className="w-24 h-24 text-[#ff3366] fill-current drop-shadow-[0_0_20px_rgba(255,51,102,0.8)]" />
-            </motion.div>
-
-            {/* Particle Effects */}
-            {particles.map((particle) => (
-              <motion.div
-                key={particle.id}
-                initial={{
-                  opacity: 1,
-                  scale: 1,
-                  x: 0,
-                  y: 0,
-                }}
-                animate={{
-                  opacity: 0,
-                  scale: 0,
-                  x: particle.x,
-                  y: particle.y,
-                }}
-                transition={{ duration: 0.8 }}
-                className="absolute top-1/2 left-1/2 z-40 pointer-events-none"
-              >
-                <Sparkles className="w-4 h-4 text-[#ff3366] fill-current" />
-              </motion.div>
-            ))}
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Creator Header with Badges */}
-      <div className="flex items-center gap-3 p-4 border-b border-white/5">
-        <motion.img
+      >
+        <img
           src={prediction.creator.avatar}
           alt={prediction.creator.name}
-          className="w-10 h-10 rounded-full border border-[#1F87FC]/40"
-          whileHover={{ scale: 1.1, rotate: 5 }}
-          transition={{ type: "spring", stiffness: 400 }}
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            border: "1.5px solid rgba(31,135,252,0.35)",
+            flexShrink: 0,
+            objectFit: "cover",
+          }}
         />
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-foreground font-medium">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: "#e2e8f0" }}>
               {prediction.creator.name}
             </span>
             {prediction.totalVolume > 10000 && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                whileHover={{ scale: 1.2, rotate: 15 }}
-              >
-                <Award className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              </motion.div>
+              <Award
+                style={{
+                  width: 12,
+                  height: 12,
+                  color: "#f6c90e",
+                  fill: "#f6c90e",
+                  flexShrink: 0,
+                }}
+              />
             )}
-            <span className="text-muted-foreground text-sm">
+            <span style={{ fontSize: 11, color: "#4a5568" }}>
               {prediction.creator.username}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-            <motion.span
-              className="px-2 py-0.5 bg-[#1F87FC]/10 border border-[#1F87FC]/30 rounded text-[#1F87FC]"
-              whileHover={{
-                scale: 1.05,
-                backgroundColor: "rgba(31, 135, 252, 0.2)",
-              }}
-            >
-              {prediction.category}
-            </motion.span>
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>{getTimeRemaining()}</span>
-            </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              color: "#1F87FC",
+              background: "rgba(31,135,252,0.1)",
+              border: "1px solid rgba(31,135,252,0.25)",
+              borderRadius: 5,
+              padding: "2px 7px",
+              letterSpacing: "0.03em",
+            }}
+          >
+            {prediction.category}
+          </span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 11,
+              color: "#64748b",
+            }}
+          >
+            <Clock style={{ width: 11, height: 11 }} />
+            <span>{getTimeRemaining()}</span>
           </div>
         </div>
       </div>
 
-      {/* Media Block */}
-      <div className="w-full relative overflow-hidden">
+      <div style={{ height: 1, background: "rgba(255,255,255,0.04)" }} />
+
+      {/* ── Featured image ── */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxHeight: 150,
+          overflow: "hidden",
+        }}
+      >
         <MediaPreview
           src={prediction.media.url}
           alt={prediction.question}
           type={prediction.media.type === "video" ? "video" : undefined}
-          className="rounded-none border-y border-[#1F87FC]/10"
+          style={{
+            width: "100%",
+            maxHeight: 150,
+            objectFit: "cover",
+            opacity: 0.75,
+            display: "block",
+            borderRadius: 0,
+          }}
         />
-
-        {/* Trending Indicator for High Volume */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to bottom, transparent 40%, #12121f 100%)",
+            pointerEvents: "none",
+          }}
+        />
         {prediction.totalVolume > 50000 && (
-          <motion.div
-            className="absolute top-3 right-3 bg-orange-500/90 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1"
-            initial={{ scale: 0, rotate: -45 }}
-            animate={{ scale: 1, rotate: 0 }}
-            whileHover={{ scale: 1.1 }}
+          <div
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 12,
+              background: "rgba(234,88,12,0.9)",
+              borderRadius: 20,
+              padding: "3px 9px",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
           >
-            <motion.div
-              animate={{ y: [0, -3, 0] }}
-              transition={{ duration: 1, repeat: Infinity }}
+            <TrendingUp style={{ width: 10, height: 10, color: "#fff" }} />
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#fff",
+                letterSpacing: "0.05em",
+              }}
             >
-              <TrendingUp className="w-3 h-3 text-white" />
-            </motion.div>
-            <span className="text-xs font-bold text-white">HOT</span>
-          </motion.div>
+              HOT
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Question & Content */}
-      <div className="p-4">
-        <h3 className="text-foreground mb-4 font-bold text-lg leading-snug group-hover:text-[#1F87FC] transition-colors">
+      {/* ── Body ── */}
+      <div style={{ padding: "16px 16px 0" }}>
+        {/* Question */}
+        <h3
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: "#e2e8f0",
+            lineHeight: 1.45,
+            margin: "0 0 14px",
+            letterSpacing: "-0.01em",
+          }}
+          className="group-hover:text-[#1F87FC] transition-colors duration-200"
+        >
           {prediction.question}
         </h3>
 
-        {/* ... (Progress Bar and Yes/No Buttons remain exactly the same as previous) ... */}
-
-        {/* 🎮 GAMIFIED PROGRESS BAR with 20% Intervals */}
-        <div className="mb-4">
-          {/* ... (Previous Progress Bar Code) ... */}
-          <div className="flex items-center gap-2 mb-2">
-            <motion.span
-              className="text-lg"
-              animate={
-                !marketComplete && interval >= 3
-                  ? {
-                      scale: [1, 1.3, 1],
-                      rotate: [0, interval >= 4 ? 20 : 10, 0],
-                    }
-                  : {}
-              }
-              transition={{
-                duration: interval >= 4 ? 0.5 : 1,
-                repeat: Infinity,
+        {/* YES / NO panels */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
+          {/* YES */}
+          <motion.button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick?.(prediction.id);
+            }}
+            disabled={marketComplete}
+            whileHover={!marketComplete ? { scale: 1.02 } : {}}
+            whileTap={!marketComplete ? { scale: 0.97 } : {}}
+            style={{
+              textAlign: "left",
+              borderRadius: 10,
+              padding: "10px 12px",
+              background: "rgba(0,255,136,0.06)",
+              border: "1px solid rgba(0,255,136,0.22)",
+              cursor: marketComplete ? "not-allowed" : "pointer",
+              opacity: marketComplete ? 0.6 : 1,
+              transition: "background 0.15s, border-color 0.15s",
+              fontFamily: "inherit",
+            }}
+            className={
+              !marketComplete
+                ? "hover:!bg-[rgba(0,255,136,0.1)] hover:!border-[rgba(0,255,136,0.45)]"
+                : ""
+            }
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                color: "rgba(0,255,136,0.6)",
+                marginBottom: 6,
               }}
             >
-              {theme.emoji}
-            </motion.span>
-            <span className={`text-xs font-bold ${theme.text}`}>
-              {theme.label}
-            </span>
-
-            {!marketComplete && interval >= 3 && (
-              <motion.div
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-red-500/20 border border-red-500/40 rounded-full"
-                animate={{
-                  scale: [1, 1.1, 1],
-                  opacity: [0.7, 1, 0.7],
-                }}
-                transition={{
-                  duration: interval >= 4 ? 0.5 : 1,
-                  repeat: Infinity,
+              YES
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "#00ff88",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1,
                 }}
               >
-                {interval >= 4 ? (
-                  <Zap className="w-3 h-3 text-red-400 fill-red-400" />
-                ) : (
-                  <Flame className="w-3 h-3 text-orange-400" />
-                )}
-                <span className="text-[10px] font-black text-red-300 uppercase tracking-wide">
-                  {interval >= 4 ? "CRITICAL" : "URGENT"}
-                </span>
-              </motion.div>
-            )}
-          </div>
+                ${prediction.yesPrice.toFixed(4)}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "rgba(0,255,136,0.65)",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {yesPercent}%
+              </span>
+            </div>
+          </motion.button>
 
-          <div className="h-2 bg-black/40 rounded-full overflow-hidden relative border border-white/10">
+          {/* NO */}
+          <motion.button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick?.(prediction.id);
+            }}
+            disabled={marketComplete}
+            whileHover={!marketComplete ? { scale: 1.02 } : {}}
+            whileTap={!marketComplete ? { scale: 0.97 } : {}}
+            style={{
+              textAlign: "left",
+              borderRadius: 10,
+              padding: "10px 12px",
+              background: "rgba(255,51,102,0.06)",
+              border: "1px solid rgba(255,51,102,0.22)",
+              cursor: marketComplete ? "not-allowed" : "pointer",
+              opacity: marketComplete ? 0.6 : 1,
+              transition: "background 0.15s, border-color 0.15s",
+              fontFamily: "inherit",
+            }}
+            className={
+              !marketComplete
+                ? "hover:!bg-[rgba(255,51,102,0.1)] hover:!border-[rgba(255,51,102,0.45)]"
+                : ""
+            }
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                color: "rgba(255,51,102,0.6)",
+                marginBottom: 6,
+              }}
+            >
+              NO
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "#ff3366",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1,
+                }}
+              >
+                ${prediction.noPrice.toFixed(4)}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "rgba(255,51,102,0.65)",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {noPercent}%
+              </span>
+            </div>
+          </motion.button>
+        </div>
+
+        {/* Sentiment bar (YES vs NO) */}
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 10,
+              color: "#4a5568",
+              marginBottom: 5,
+            }}
+          >
+            <span>YES {yesPercent}%</span>
+            <span>NO {noPercent}%</span>
+          </div>
+          <div
+            style={{
+              height: 5,
+              background: "rgba(255,51,102,0.2)",
+              borderRadius: 99,
+              overflow: "hidden",
+            }}
+          >
             <motion.div
-              className={`h-full relative bg-gradient-to-r ${theme.gradient}`}
-              initial={{ width: "0%" }}
+              initial={{ width: "50%" }}
+              animate={{ width: `${yesPercent}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              style={{
+                height: "100%",
+                background: "linear-gradient(90deg, #00ff88, #1F87FC)",
+                borderRadius: 99,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Time progress bar ── */}
+      {/* Time progress bar */}
+      <div style={{ padding: "0 16px" }}>
+        <div
+          style={{
+            height: 8,
+            background:
+              timeProgress >= 60
+                ? "rgba(234,88,12,0.1)"
+                : "rgba(255,255,255,0.05)",
+            borderRadius: 99,
+            overflow: "visible",
+            position: "relative",
+          }}
+        >
+          {/* Animated fill */}
+          <motion.div
+            animate={{ width: `${timeProgress}%` }}
+            transition={{ duration: 0.6, type: "spring", bounce: 0.3 }}
+            style={{
+              height: "100%",
+              borderRadius: 99,
+              background: `linear-gradient(90deg, ${stageConfig[getStage(timeProgress)].from}, ${stageConfig[getStage(timeProgress)].to})`,
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            {/* Shimmer stripes */}
+            {!marketComplete && (
+              <motion.div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: 99,
+                  backgroundImage:
+                    "repeating-linear-gradient(60deg, transparent, transparent 12px, rgba(255,255,255,0.12) 12px, rgba(255,255,255,0.12) 24px)",
+                }}
+                animate={{ backgroundPosition: ["0px 0px", "48px 0px"] }}
+                transition={{
+                  duration: parseFloat(
+                    stageConfig[getStage(timeProgress)].speed,
+                  ),
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              />
+            )}
+          </motion.div>
+
+          {/* Glowing tip dot */}
+          {!marketComplete && (
+            <motion.div
               animate={{
-                width: `${timeProgress}%`,
+                left: `${timeProgress}%`,
+                width: timeProgress >= 60 ? [14, 18, 14] : 14,
+                height: timeProgress >= 60 ? [14, 18, 14] : 14,
               }}
               transition={{
+                left: { duration: 0.6, type: "spring", bounce: 0.3 },
                 width: {
-                  duration: 0.5,
-                  ease: "easeOut",
+                  duration: timeProgress >= 80 ? 0.3 : 0.55,
+                  repeat: Infinity,
+                },
+                height: {
+                  duration: timeProgress >= 80 ? 0.3 : 0.55,
+                  repeat: Infinity,
                 },
               }}
-            >
-              {!marketComplete && (
-                <motion.div
-                  className="absolute inset-0 h-full"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(
-                      45deg,
-                      transparent,
-                      transparent 10px,
-                      rgba(255, 255, 255, 0.15) 10px,
-                      rgba(255, 255, 255, 0.15) 20px
-                    )`,
-                    backgroundSize: "200% 200%",
-                  }}
-                  animate={{
-                    backgroundPosition: ["0% 0%", "100% 100%"],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                />
-              )}
-            </motion.div>
-          </div>
+              style={{
+                position: "absolute",
+                top: "50%",
+                translateX: "-50%",
+                translateY: "-50%",
+                borderRadius: "50%",
+                background: stageConfig[getStage(timeProgress)].tip,
+                border: "2px solid #12121f",
+                boxShadow: `0 0 14px ${stageConfig[getStage(timeProgress)].tip}`,
+                pointerEvents: "none",
+                zIndex: 2,
+              }}
+            />
+          )}
         </div>
 
-        {/* YES/NO Market Buttons */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          {/* ... (Previous Buttons Code) ... */}
-          <motion.button
-            onClick={handleBuy}
-            disabled={marketComplete}
-            className={`bg-gradient-to-br from-[#00ff88]/10 to-transparent border border-[#00ff88]/30 rounded-lg p-3 transition-all duration-300 group/btn relative overflow-hidden ${
-              marketComplete
-                ? "opacity-60 cursor-not-allowed"
-                : "hover:border-[#00ff88] hover:bg-[#00ff88]/10"
-            }`}
-            whileHover={
-              !marketComplete
-                ? {
-                    scale: 1.05,
-                    boxShadow: "0 0 20px rgba(0, 255, 136, 0.3)",
-                  }
-                : {}
-            }
-            whileTap={!marketComplete ? { scale: 0.95 } : {}}
-            animate={
-              !marketComplete && prediction.yesPrice > 0.5
-                ? {
-                    borderColor: [
-                      "rgba(0, 255, 136, 0.3)",
-                      "rgba(0, 255, 136, 0.6)",
-                      "rgba(0, 255, 136, 0.3)",
-                    ],
-                  }
-                : {}
-            }
-            transition={{
-              borderColor: {
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-            }}
-          >
-            <div className="relative z-10 text-left">
-              <div
-                className={`text-xs mb-1 font-bold tracking-wide transition-colors ${
-                  marketComplete
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground group-hover/btn:text-[#00ff88]"
-                }`}
-              >
-                YES
-              </div>
-              <div className="flex items-end justify-between">
-                <motion.div
-                  className="text-2xl font-bold text-[#00ff88]"
-                  whileHover={!marketComplete ? { scale: 1.1 } : {}}
-                  animate={
-                    !marketComplete && prediction.yesPrice > 0.7
-                      ? {
-                          scale: [1, 1.05, 1],
-                        }
-                      : {}
-                  }
-                  transition={{
-                    scale: {
-                      duration: 1,
-                      repeat: Infinity,
-                    },
-                  }}
-                >
-                  ${prediction.yesPrice.toFixed(4)}
-                </motion.div>
-                <div className="text-xs text-[#00ff88]/80 mb-1 font-mono">
-                  {(prediction.yesPrice * 100).toFixed(0)}%
-                </div>
-              </div>
-            </div>
-          </motion.button>
-
-          {/* BUY NO */}
-          <motion.button
-            onClick={handleBuy}
-            disabled={marketComplete}
-            className={`bg-gradient-to-br from-[#ff3366]/10 to-transparent border border-[#ff3366]/30 rounded-lg p-3 transition-all duration-300 group/btn relative overflow-hidden ${
-              marketComplete
-                ? "opacity-60 cursor-not-allowed"
-                : "hover:border-[#ff3366] hover:bg-[#ff3366]/10"
-            }`}
-            whileHover={
-              !marketComplete
-                ? {
-                    scale: 1.05,
-                    boxShadow: "0 0 20px rgba(255, 51, 102, 0.3)",
-                  }
-                : {}
-            }
-            whileTap={!marketComplete ? { scale: 0.95 } : {}}
-            animate={
-              !marketComplete && prediction.noPrice > 0.5
-                ? {
-                    borderColor: [
-                      "rgba(255, 51, 102, 0.3)",
-                      "rgba(255, 51, 102, 0.6)",
-                      "rgba(255, 51, 102, 0.3)",
-                    ],
-                  }
-                : {}
-            }
-            transition={{
-              borderColor: {
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-            }}
-          >
-            <div className="relative z-10 text-left">
-              <div
-                className={`text-xs mb-1 font-bold tracking-wide transition-colors ${
-                  marketComplete
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground group-hover/btn:text-[#ff3366]"
-                }`}
-              >
-                NO
-              </div>
-              <div className="flex items-end justify-between">
-                <motion.div
-                  className="text-2xl font-bold text-[#ff3366]"
-                  whileHover={!marketComplete ? { scale: 1.1 } : {}}
-                  animate={
-                    !marketComplete && prediction.noPrice > 0.7
-                      ? {
-                          scale: [1, 1.05, 1],
-                        }
-                      : {}
-                  }
-                  transition={{
-                    scale: {
-                      duration: 1,
-                      repeat: Infinity,
-                    },
-                  }}
-                >
-                  ${prediction.noPrice.toFixed(4)}
-                </motion.div>
-                <div className="text-xs text-[#ff3366]/80 mb-1 font-mono">
-                  {(prediction.noPrice * 100).toFixed(0)}%
-                </div>
-              </div>
-            </div>
-          </motion.button>
-        </div>
-
-        {/* Social Actions with Enhanced Interactions */}
-        <div className="flex items-center gap-6 pt-4 border-t border-white/5">
-          <motion.button
-            onClick={handleLike}
-            className={`flex items-center gap-2 transition-colors ${
-              prediction.isLiked
-                ? "text-[#ff3366]"
-                : "text-muted-foreground hover:text-[#1F87FC]"
-            }`}
-            whileHover={{ scale: 1.1, y: -2 }}
-            whileTap={{ scale: 1.3 }}
-          >
-            <motion.div
-              animate={
-                prediction.isLiked
-                  ? {
-                      scale: [1, 1.2, 1],
-                    }
-                  : {}
-              }
-              transition={{ duration: 0.3 }}
-            >
-              <Heart
-                className={`w-4 h-4 ${prediction.isLiked ? "fill-current" : ""}`}
+        {/* Meta row */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 10,
+            color: "#3a4a5e",
+            marginTop: 6,
+            paddingBottom: 12,
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {!marketComplete && (
+              <motion.span
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{
+                  duration: timeProgress >= 80 ? 0.4 : 1.2,
+                  repeat: Infinity,
+                }}
+                style={{
+                  display: "inline-block",
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: stageConfig[getStage(timeProgress)].tip,
+                  boxShadow: `0 0 5px ${stageConfig[getStage(timeProgress)].tip}`,
+                }}
               />
-            </motion.div>
-            <motion.span
-              className="text-xs font-medium"
-              key={prediction.likes}
-              initial={{ scale: 1 }}
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 0.3 }}
-            >
-              {formatNumber(prediction.likes)}
-            </motion.span>
-          </motion.button>
+            )}
+            {marketComplete
+              ? "Market closed"
+              : `${stageConfig[getStage(timeProgress)].label} · ${Math.round(timeProgress)}% elapsed`}
+          </span>
+          <span>{formatNumber(prediction.traders ?? 0)} traders</span>
+        </div>
+      </div>
 
-          <motion.button
-            onClick={(e) => {
-              e.stopPropagation();
-              onComment?.(prediction.id);
+      <div style={{ height: 1, background: "rgba(255,255,255,0.04)" }} />
+
+      {/* ── Footer: actions + volume ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "10px 16px 14px",
+          gap: 2,
+        }}
+      >
+        {/* Like */}
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            onLike?.(prediction.id);
+          }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 1.2 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 12,
+            padding: "6px 8px",
+            borderRadius: 7,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: prediction.isLiked ? "#ff3366" : "#4a5568",
+            fontFamily: "inherit",
+            transition: "color 0.15s, background 0.15s",
+          }}
+          className={
+            !prediction.isLiked
+              ? "hover:!text-[#1F87FC] hover:!bg-[rgba(31,135,252,0.08)]"
+              : ""
+          }
+        >
+          <Heart
+            style={{
+              width: 14,
+              height: 14,
+              fill: prediction.isLiked ? "#ff3366" : "none",
+              stroke: "currentColor",
+              strokeWidth: 1.5,
             }}
-            className="flex items-center gap-2 text-muted-foreground hover:text-[#1F87FC] transition-colors"
-            whileHover={{ scale: 1.1, y: -2 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span className="text-xs font-medium">
-              {formatNumber(prediction.comments)}
-            </span>
-          </motion.button>
+          />
+          <span>{formatNumber(prediction.likes)}</span>
+        </motion.button>
 
-          <motion.button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRepost?.(prediction.id);
+        {/* Comment */}
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            onComment?.(prediction.id);
+          }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.92 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 12,
+            padding: "6px 8px",
+            borderRadius: 7,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: "#4a5568",
+            fontFamily: "inherit",
+            transition: "color 0.15s, background 0.15s",
+          }}
+          className="hover:!text-[#1F87FC] hover:!bg-[rgba(31,135,252,0.08)]"
+        >
+          <MessageCircle style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+          <span>{formatNumber(prediction.comments)}</span>
+        </motion.button>
+
+        {/* Repost */}
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRepost?.(prediction.id);
+          }}
+          whileHover={{ scale: 1.05, rotate: 90 }}
+          whileTap={{ scale: 0.92 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 12,
+            padding: "6px 8px",
+            borderRadius: 7,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: "#4a5568",
+            fontFamily: "inherit",
+            transition: "color 0.15s, background 0.15s",
+          }}
+          className="hover:!text-[#1F87FC] hover:!bg-[rgba(31,135,252,0.08)]"
+        >
+          <Repeat2 style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+          <span>{formatNumber(prediction.reposts)}</span>
+        </motion.button>
+
+        {/* Share */}
+        <motion.button
+          onClick={handleShare}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.92 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 12,
+            padding: "6px 8px",
+            borderRadius: 7,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: "#4a5568",
+            fontFamily: "inherit",
+            transition: "color 0.15s, background 0.15s",
+          }}
+          className="hover:!text-[#1F87FC] hover:!bg-[rgba(31,135,252,0.08)]"
+        >
+          <Share2 style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+        </motion.button>
+
+        {/* Volume */}
+        <div style={{ marginLeft: "auto" }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "#64748b",
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 6,
+              padding: "4px 8px",
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "0.01em",
             }}
-            className="flex items-center gap-2 text-muted-foreground hover:text-[#1F87FC] transition-colors"
-            whileHover={{ scale: 1.1, rotate: 90 }}
-            whileTap={{ scale: 0.9, rotate: 180 }}
           >
-            <Repeat2 className="w-4 h-4" />
-            <span className="text-xs font-medium">
-              {formatNumber(prediction.reposts)}
-            </span>
-          </motion.button>
-
-          {/* 🟢 4. SHARE BUTTON */}
-          <motion.button
-            onClick={handleShare}
-            className="flex items-center gap-2 text-muted-foreground hover:text-[#1F87FC] transition-colors"
-            whileHover={{ scale: 1.1, rotate: -15 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <Share2 className="w-4 h-4" />
-          </motion.button>
-
-          <motion.div
-            className="ml-auto text-xs text-muted-foreground font-mono bg-white/5 px-2 py-1 rounded"
-            whileHover={{
-              scale: 1.05,
-              backgroundColor: "rgba(31, 135, 252, 0.1)",
-            }}
-          >
-            Vol: ${formatNumber(prediction.totalVolume)}
-          </motion.div>
+            <span style={{ color: "#3a4a5e" }}>Vol </span>$
+            {formatNumber(prediction.totalVolume)}
+          </span>
         </div>
       </div>
     </motion.div>
