@@ -1,3 +1,964 @@
+// import { useState, useEffect } from "react";
+// import {
+//   TrendingUp,
+//   TrendingDown,
+//   DollarSign,
+//   PieChart,
+//   Loader2,
+//   Wallet,
+//   Trophy,
+//   CheckCircle,
+//   CreditCard,
+//   ArrowUpRight,
+//   ArrowDownRight,
+//   Clock,
+//   BarChart3,
+// } from "lucide-react";
+// import { useAuth } from "../hooks/useAuth";
+// import { MediaPreview } from "./MediaPreview";
+// import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
+// import { Prediction } from "../types/prediction";
+// import { toast } from "sonner";
+// import { CallData, RpcProvider, uint256 } from "starknet";
+
+// const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
+
+// interface UserPosition {
+//   prediction: Prediction;
+//   marketId: string;
+//   yesShares: number;
+//   noShares: number;
+//   invested: number;
+//   currentValue: number;
+//   profitLoss: number;
+//   status: number;
+//   outcome?: boolean;
+//   hasClaimed: boolean;
+// }
+
+// interface PortfolioProps {
+//   onViewMarket: (id: string) => void;
+// }
+
+// const fmt = (n: number, decimals = 2) => n.toFixed(decimals);
+// const fmtUSD = (n: number) => `$${fmt(n)}`;
+
+// export function Portfolio({ onViewMarket }: PortfolioProps) {
+//   const { address, execute, isConnected, connect } = useAuth();
+//   const [positions, setPositions] = useState<UserPosition[]>([]);
+//   const [loading, setLoading] = useState(false);
+//   const [claimingId, setClaimingId] = useState<string | null>(null);
+//   const [usdcBalance, setUsdcBalance] = useState("0.00");
+//   const [balanceLoading, setBalanceLoading] = useState(false);
+
+//   useEffect(() => {
+//     if (!address) return;
+//     const fetchPortfolio = async () => {
+//       setLoading(true);
+//       try {
+//         const [marketsRes, posRes] = await Promise.all([
+//           fetch(`${API_URL}/markets`),
+//           fetch(`${API_URL}/positions/${address}`),
+//         ]);
+//         const marketsData: ApiMarket[] = await marketsRes.json();
+//         const myBets = await posRes.json();
+
+//         const activePositions: UserPosition[] = myBets
+//           .map((bet: any) => {
+//             const market = marketsData.find((m) => m.marketId === bet.marketId);
+//             if (!market) return null;
+//             const yesShares = Number(bet.yesShares);
+//             const noShares = Number(bet.noShares);
+//             const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
+//             if (!claimed && yesShares <= 0 && noShares <= 0) return null;
+//             const realInvested = Number(
+//               bet.totalInvested || bet.total_invested || 0,
+//             );
+//             const costBasis =
+//               realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
+//             let currentRealValue = 0;
+//             if (claimed || market.status === 3) {
+//               const isYesWinner = market.outcome === true;
+//               const winningShares = isYesWinner ? yesShares : noShares;
+//               const totalWinningReal = isYesWinner
+//                 ? Number(market.yesShares || 0)
+//                 : Number(market.noShares || 0);
+//               const totalRealVolume = Number(market.totalVolume || 0);
+//               if (totalWinningReal > 0 && winningShares > 0) {
+//                 currentRealValue =
+//                   (winningShares / totalWinningReal) * totalRealVolume * 0.98;
+//               }
+//             } else {
+//               currentRealValue =
+//                 yesShares * Number(market.yesPrice || 0) +
+//                 noShares * Number(market.noPrice || 0);
+//             }
+//             return {
+//               prediction: mapMarketToPrediction(market),
+//               marketId: market.marketId.toString(),
+//               yesShares,
+//               noShares,
+//               invested: costBasis,
+//               currentValue: currentRealValue,
+//               profitLoss: currentRealValue - costBasis,
+//               status: market.status || 1,
+//               outcome: market.outcome,
+//               hasClaimed: claimed,
+//             };
+//           })
+//           .filter(Boolean);
+//         setPositions(activePositions);
+//       } catch (e) {
+//         console.error("Error fetching portfolio", e);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+//     fetchPortfolio();
+//   }, [address]);
+
+//   useEffect(() => {
+//     if (!address || !isConnected) return;
+//     const fetchBalance = async () => {
+//       setBalanceLoading(true);
+//       try {
+//         const usdcAddress =
+//           import.meta.env.VITE_USDC_ADDRESS ||
+//           "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+//         const provider = new RpcProvider({
+//           nodeUrl:
+//             import.meta.env.VITE_NODE_URL ||
+//             "https://starknet-mainnet.g.alchemy.com/v2/EzO62qQ-wC9-OQyeOyL1y",
+//         });
+//         const res = await provider.callContract({
+//           contractAddress: usdcAddress,
+//           entrypoint: "balanceOf",
+//           calldata: CallData.compile([address]),
+//         });
+//         const balanceBN = uint256.uint256ToBN({ low: res[0], high: res[1] });
+//         setUsdcBalance((Number(balanceBN.toString()) / 1_000_000).toFixed(2));
+//       } catch {
+//         setUsdcBalance("0.00");
+//       } finally {
+//         setBalanceLoading(false);
+//       }
+//     };
+//     fetchBalance();
+//     const iv = setInterval(fetchBalance, 10000);
+//     return () => clearInterval(iv);
+//   }, [address, isConnected]);
+
+//   const handleClaim = async (marketId: string, e: React.MouseEvent) => {
+//     e.stopPropagation();
+//     if (!isConnected) return;
+//     setClaimingId(marketId);
+//     try {
+//       await execute([
+//         {
+//           contractAddress: import.meta.env.VITE_HUB_ADDRESS,
+//           entrypoint: "claim_winnings",
+//           calldata: CallData.compile([marketId]),
+//         },
+//       ]);
+//       toast.success("Winnings claimed!");
+//       setPositions((prev) =>
+//         prev.map((p) =>
+//           p.marketId === marketId ? { ...p, hasClaimed: true } : p,
+//         ),
+//       );
+//     } catch (err: any) {
+//       toast.error("Claim failed", { description: err.message });
+//     } finally {
+//       setClaimingId(null);
+//     }
+//   };
+
+//   const getPositionStatus = (pos: UserPosition) => {
+//     if (pos.status === 1)
+//       return { type: "active", label: "Active", canClaim: false };
+//     const userWon =
+//       (pos.outcome === true && pos.yesShares > 0) ||
+//       (pos.outcome === false && pos.noShares > 0);
+//     if (userWon)
+//       return pos.hasClaimed
+//         ? { type: "claimed", label: "Claimed", canClaim: false }
+//         : { type: "won", label: "Won", canClaim: true };
+//     return { type: "lost", label: "Lost", canClaim: false };
+//   };
+
+//   const totalInvested = positions.reduce((s, p) => s + p.invested, 0);
+//   const totalValue = positions.reduce((s, p) => s + p.currentValue, 0);
+//   const totalPL = positions.reduce((s, p) => s + p.profitLoss, 0);
+//   const plPercent =
+//     totalInvested > 0 ? ((totalPL / totalInvested) * 100).toFixed(2) : "0.00";
+//   const activePositions = positions.filter((p) => p.status === 1);
+//   const resolvedPositions = positions.filter((p) => p.status === 3);
+//   const wonPositions = resolvedPositions.filter((p) => {
+//     const s = getPositionStatus(p);
+//     return s.type === "won" || s.type === "claimed";
+//   });
+
+//   const STATUS_STYLES: Record<
+//     string,
+//     { color: string; bg: string; border: string }
+//   > = {
+//     active: {
+//       color: "#1F87FC",
+//       bg: "rgba(31,135,252,0.08)",
+//       border: "rgba(31,135,252,0.25)",
+//     },
+//     won: {
+//       color: "#00ff88",
+//       bg: "rgba(0,255,136,0.08)",
+//       border: "rgba(0,255,136,0.25)",
+//     },
+//     claimed: {
+//       color: "#00ff88",
+//       bg: "rgba(0,255,136,0.05)",
+//       border: "rgba(0,255,136,0.15)",
+//     },
+//     lost: {
+//       color: "#ff3366",
+//       bg: "rgba(255,51,102,0.05)",
+//       border: "rgba(255,51,102,0.15)",
+//     },
+//   };
+
+//   // ── Not connected ──
+//   if (!address) {
+//     return (
+//       <div
+//         style={{
+//           width: "100%",
+//           maxWidth: 560,
+//           margin: "0 auto",
+//           padding: "40px 20px",
+//           fontFamily: "inherit",
+//         }}
+//       >
+//         <div
+//           style={{
+//             background: "#12121f",
+//             border: "1px solid rgba(31,135,252,0.18)",
+//             borderRadius: 18,
+//             padding: "60px 32px",
+//             textAlign: "center",
+//             display: "flex",
+//             flexDirection: "column",
+//             alignItems: "center",
+//             gap: 0,
+//           }}
+//         >
+//           <div
+//             style={{
+//               width: 56,
+//               height: 56,
+//               borderRadius: "50%",
+//               background: "rgba(31,135,252,0.08)",
+//               border: "1px solid rgba(31,135,252,0.2)",
+//               display: "flex",
+//               alignItems: "center",
+//               justifyContent: "center",
+//               marginBottom: 18,
+//             }}
+//           >
+//             <Wallet style={{ width: 24, height: 24, color: "#1F87FC" }} />
+//           </div>
+//           <h2
+//             style={{
+//               fontSize: 20,
+//               fontWeight: 600,
+//               color: "#e2e8f0",
+//               margin: "0 0 8px",
+//             }}
+//           >
+//             Connect your wallet
+//           </h2>
+//           <p
+//             style={{
+//               fontSize: 13,
+//               color: "#4a5568",
+//               margin: "0 0 28px",
+//               maxWidth: 300,
+//               lineHeight: 1.6,
+//             }}
+//           >
+//             Track your predictions, view performance, and claim your winnings.
+//           </p>
+//           <button
+//             onClick={() => connect("web3")}
+//             style={{
+//               display: "inline-flex",
+//               alignItems: "center",
+//               gap: 8,
+//               padding: "11px 24px",
+//               background: "#1F87FC",
+//               color: "#fff",
+//               border: "none",
+//               borderRadius: 10,
+//               fontSize: 13,
+//               fontWeight: 600,
+//               cursor: "pointer",
+//               fontFamily: "inherit",
+//               boxShadow: "0 0 16px rgba(31,135,252,0.25)",
+//               transition: "opacity 0.15s",
+//             }}
+//             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+//             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+//           >
+//             <Wallet style={{ width: 14, height: 14 }} /> Connect wallet
+//           </button>
+//         </div>
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <div
+//       style={{
+//         width: "100%",
+//         maxWidth: 900,
+//         margin: "0 auto",
+//         padding: "28px 20px 80px",
+//         fontFamily: "inherit",
+//         display: "flex",
+//         flexDirection: "column",
+//         gap: 20,
+//       }}
+//     >
+//       {/* ── Header ── */}
+//       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+//         <div
+//           style={{
+//             width: 36,
+//             height: 36,
+//             borderRadius: 10,
+//             background: "rgba(31,135,252,0.08)",
+//             border: "1px solid rgba(31,135,252,0.2)",
+//             display: "flex",
+//             alignItems: "center",
+//             justifyContent: "center",
+//             flexShrink: 0,
+//           }}
+//         >
+//           <PieChart style={{ width: 16, height: 16, color: "#1F87FC" }} />
+//         </div>
+//         <div>
+//           <h1
+//             style={{
+//               fontSize: 18,
+//               fontWeight: 600,
+//               color: "#e2e8f0",
+//               margin: 0,
+//               lineHeight: 1.2,
+//               display: "flex",
+//               alignItems: "center",
+//               gap: 8,
+//             }}
+//           >
+//             Portfolio
+//             {(loading || balanceLoading) && (
+//               <Loader2
+//                 style={{
+//                   width: 14,
+//                   height: 14,
+//                   color: "#1F87FC",
+//                   animation: "spin 0.8s linear infinite",
+//                 }}
+//               />
+//             )}
+//           </h1>
+//           <p
+//             style={{ fontSize: 12, color: "#4a5568", margin: 0, marginTop: 2 }}
+//           >
+//             Track your prediction investments and performance
+//           </p>
+//         </div>
+//         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+//       </div>
+
+//       {/* ── Stats grid ── */}
+//       <div
+//         style={{
+//           display: "grid",
+//           gridTemplateColumns: "repeat(4, 1fr)",
+//           gap: 10,
+//         }}
+//       >
+//         {[
+//           {
+//             icon: <CreditCard style={{ width: 13, height: 13 }} />,
+//             label: "Balance",
+//             value: `$${usdcBalance}`,
+//             sub: "USDC",
+//             color: "#1F87FC",
+//           },
+//           {
+//             icon: <DollarSign style={{ width: 13, height: 13 }} />,
+//             label: "Invested",
+//             value: fmtUSD(totalInvested),
+//             sub: `${positions.length} position${positions.length !== 1 ? "s" : ""}`,
+//             color: "#1F87FC",
+//           },
+//           {
+//             icon: <PieChart style={{ width: 13, height: 13 }} />,
+//             label: "Current value",
+//             value: fmtUSD(totalValue),
+//             sub: `${activePositions.length} active`,
+//             color: "#1F87FC",
+//           },
+//           {
+//             icon: <Trophy style={{ width: 13, height: 13 }} />,
+//             label: "Win rate",
+//             value: `${resolvedPositions.length > 0 ? ((wonPositions.length / resolvedPositions.length) * 100).toFixed(0) : 0}%`,
+//             sub: `${wonPositions.length}/${resolvedPositions.length} won`,
+//             color: "#00ff88",
+//           },
+//         ].map((stat) => (
+//           <div
+//             key={stat.label}
+//             style={{
+//               background: "rgba(255,255,255,0.03)",
+//               border: `1px solid ${stat.color}18`,
+//               borderRadius: 12,
+//               padding: "14px 14px 12px",
+//             }}
+//           >
+//             <div
+//               style={{
+//                 display: "flex",
+//                 alignItems: "center",
+//                 gap: 5,
+//                 color: stat.color,
+//                 opacity: 0.7,
+//                 marginBottom: 8,
+//               }}
+//             >
+//               {stat.icon}
+//               <span
+//                 style={{
+//                   fontSize: 10,
+//                   fontWeight: 500,
+//                   letterSpacing: "0.03em",
+//                 }}
+//               >
+//                 {stat.label}
+//               </span>
+//             </div>
+//             <div
+//               style={{
+//                 fontSize: 20,
+//                 fontWeight: 700,
+//                 color: "#e2e8f0",
+//                 fontVariantNumeric: "tabular-nums",
+//                 letterSpacing: "-0.02em",
+//                 marginBottom: 3,
+//               }}
+//             >
+//               {stat.value}
+//             </div>
+//             <div style={{ fontSize: 10, color: "#3a4a5e" }}>{stat.sub}</div>
+//           </div>
+//         ))}
+//       </div>
+
+//       {/* ── P&L banner ── */}
+//       {totalInvested > 0 && (
+//         <div
+//           style={{
+//             background:
+//               totalPL >= 0 ? "rgba(0,255,136,0.05)" : "rgba(255,51,102,0.05)",
+//             border: `1px solid ${totalPL >= 0 ? "rgba(0,255,136,0.2)" : "rgba(255,51,102,0.2)"}`,
+//             borderRadius: 14,
+//             padding: "16px 18px",
+//             display: "flex",
+//             alignItems: "center",
+//             justifyContent: "space-between",
+//           }}
+//         >
+//           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+//             <div
+//               style={{
+//                 width: 36,
+//                 height: 36,
+//                 borderRadius: 10,
+//                 background:
+//                   totalPL >= 0 ? "rgba(0,255,136,0.1)" : "rgba(255,51,102,0.1)",
+//                 display: "flex",
+//                 alignItems: "center",
+//                 justifyContent: "center",
+//               }}
+//             >
+//               {totalPL >= 0 ? (
+//                 <ArrowUpRight
+//                   style={{ width: 18, height: 18, color: "#00ff88" }}
+//                 />
+//               ) : (
+//                 <ArrowDownRight
+//                   style={{ width: 18, height: 18, color: "#ff3366" }}
+//                 />
+//               )}
+//             </div>
+//             <div>
+//               <div style={{ fontSize: 11, color: "#4a5568", marginBottom: 3 }}>
+//                 Total profit / loss
+//               </div>
+//               <div
+//                 style={{
+//                   fontSize: 22,
+//                   fontWeight: 700,
+//                   color: totalPL >= 0 ? "#00ff88" : "#ff3366",
+//                   fontVariantNumeric: "tabular-nums",
+//                   letterSpacing: "-0.02em",
+//                 }}
+//               >
+//                 {totalPL >= 0 ? "+" : ""}
+//                 {fmtUSD(totalPL)}
+//               </div>
+//             </div>
+//           </div>
+//           <div style={{ textAlign: "right" }}>
+//             <div style={{ fontSize: 11, color: "#4a5568", marginBottom: 3 }}>
+//               Return
+//             </div>
+//             <div
+//               style={{
+//                 fontSize: 22,
+//                 fontWeight: 700,
+//                 color: totalPL >= 0 ? "#00ff88" : "#ff3366",
+//                 fontVariantNumeric: "tabular-nums",
+//               }}
+//             >
+//               {totalPL >= 0 ? "+" : ""}
+//               {plPercent}%
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* ── Positions ── */}
+//       <div>
+//         <div
+//           style={{
+//             fontSize: 12,
+//             fontWeight: 500,
+//             color: "#64748b",
+//             letterSpacing: "0.04em",
+//             marginBottom: 12,
+//             display: "flex",
+//             alignItems: "center",
+//             gap: 6,
+//           }}
+//         >
+//           <Clock style={{ width: 12, height: 12 }} />
+//           Your positions · {positions.length} total
+//         </div>
+
+//         {!loading && positions.length === 0 ? (
+//           <div
+//             style={{
+//               background: "#12121f",
+//               border: "1px solid rgba(31,135,252,0.1)",
+//               borderRadius: 16,
+//               padding: "60px 24px",
+//               textAlign: "center",
+//               display: "flex",
+//               flexDirection: "column",
+//               alignItems: "center",
+//               gap: 10,
+//             }}
+//           >
+//             <PieChart style={{ width: 32, height: 32, color: "#3a4a5e" }} />
+//             <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
+//               No active positions
+//             </p>
+//             <p style={{ fontSize: 12, color: "#3a4a5e", margin: 0 }}>
+//               Start trading predictions to build your portfolio
+//             </p>
+//           </div>
+//         ) : (
+//           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+//             {positions.map((position) => {
+//               const status = getPositionStatus(position);
+//               const ss = STATUS_STYLES[status.type] || STATUS_STYLES.active;
+//               const profitPercent =
+//                 position.invested > 0
+//                   ? ((position.profitLoss / position.invested) * 100).toFixed(1)
+//                   : "0.0";
+
+//               return (
+//                 <div
+//                   key={position.marketId}
+//                   style={{
+//                     background: "#12121f",
+//                     border: `1px solid ${ss.border}`,
+//                     borderRadius: 16,
+//                     padding: "16px 18px",
+//                     transition: "border-color 0.2s",
+//                     boxShadow:
+//                       status.type === "won" && !position.hasClaimed
+//                         ? "0 0 20px rgba(0,255,136,0.08)"
+//                         : "none",
+//                   }}
+//                 >
+//                   {/* Top row: media + question + status */}
+//                   <div
+//                     style={{
+//                       display: "flex",
+//                       alignItems: "flex-start",
+//                       gap: 12,
+//                       marginBottom: 14,
+//                     }}
+//                   >
+//                     <div
+//                       style={{
+//                         width: 72,
+//                         height: 54,
+//                         flexShrink: 0,
+//                         borderRadius: 8,
+//                         overflow: "hidden",
+//                         border: "1px solid rgba(255,255,255,0.05)",
+//                         background: "#0d0d18",
+//                       }}
+//                     >
+//                       <MediaPreview
+//                         src={position.prediction.media.url}
+//                         type={
+//                           position.prediction.media.type === "video"
+//                             ? "video"
+//                             : undefined
+//                         }
+//                         alt="market"
+//                         style={{
+//                           width: "100%",
+//                           height: "100%",
+//                           objectFit: "cover",
+//                           display: "block",
+//                         }}
+//                       />
+//                     </div>
+
+//                     <div
+//                       style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+//                       onClick={() => onViewMarket(position.marketId)}
+//                     >
+//                       <p
+//                         style={{
+//                           fontSize: 13,
+//                           fontWeight: 500,
+//                           color: "#e2e8f0",
+//                           margin: "0 0 7px",
+//                           lineHeight: 1.4,
+//                           display: "-webkit-box",
+//                           WebkitLineClamp: 2,
+//                           WebkitBoxOrient: "vertical",
+//                           overflow: "hidden",
+//                         }}
+//                       >
+//                         {position.prediction.question}
+//                       </p>
+//                       <div
+//                         style={{
+//                           display: "flex",
+//                           alignItems: "center",
+//                           gap: 6,
+//                           flexWrap: "wrap",
+//                         }}
+//                       >
+//                         <span
+//                           style={{
+//                             fontSize: 10,
+//                             color: "#4a5568",
+//                             background: "rgba(255,255,255,0.04)",
+//                             borderRadius: 5,
+//                             padding: "2px 7px",
+//                           }}
+//                         >
+//                           {position.prediction.creator.name}
+//                         </span>
+//                         <span
+//                           style={{
+//                             fontSize: 9,
+//                             fontWeight: 700,
+//                             letterSpacing: "0.06em",
+//                             textTransform: "uppercase",
+//                             color: ss.color,
+//                             background: ss.bg,
+//                             border: `1px solid ${ss.border}`,
+//                             borderRadius: 5,
+//                             padding: "2px 7px",
+//                             display: "flex",
+//                             alignItems: "center",
+//                             gap: 3,
+//                           }}
+//                         >
+//                           {status.type === "active" && (
+//                             <span
+//                               style={{
+//                                 width: 5,
+//                                 height: 5,
+//                                 borderRadius: "50%",
+//                                 background: "#1F87FC",
+//                                 display: "inline-block",
+//                               }}
+//                             />
+//                           )}
+//                           {status.type === "won" && (
+//                             <Trophy style={{ width: 9, height: 9 }} />
+//                           )}
+//                           {status.type === "claimed" && (
+//                             <CheckCircle style={{ width: 9, height: 9 }} />
+//                           )}
+//                           {status.label}
+//                         </span>
+//                       </div>
+//                     </div>
+//                   </div>
+
+//                   {/* Shares row */}
+//                   {(position.yesShares > 0 || position.noShares > 0) && (
+//                     <div
+//                       style={{
+//                         display: "grid",
+//                         gridTemplateColumns:
+//                           position.yesShares > 0 && position.noShares > 0
+//                             ? "1fr 1fr"
+//                             : "1fr",
+//                         gap: 8,
+//                         marginBottom: 14,
+//                       }}
+//                     >
+//                       {position.yesShares > 0 && (
+//                         <div
+//                           style={{
+//                             background: "rgba(0,255,136,0.04)",
+//                             border: "1px solid rgba(0,255,136,0.18)",
+//                             borderRadius: 10,
+//                             padding: "10px 12px",
+//                           }}
+//                         >
+//                           <div
+//                             style={{
+//                               fontSize: 10,
+//                               color: "rgba(0,255,136,0.6)",
+//                               fontWeight: 600,
+//                               letterSpacing: "0.05em",
+//                               marginBottom: 4,
+//                             }}
+//                           >
+//                             YES
+//                           </div>
+//                           <div
+//                             style={{
+//                               fontSize: 16,
+//                               fontWeight: 700,
+//                               color: "#00ff88",
+//                               fontVariantNumeric: "tabular-nums",
+//                             }}
+//                           >
+//                             {position.yesShares.toFixed(4)}
+//                           </div>
+//                         </div>
+//                       )}
+//                       {position.noShares > 0 && (
+//                         <div
+//                           style={{
+//                             background: "rgba(255,51,102,0.04)",
+//                             border: "1px solid rgba(255,51,102,0.18)",
+//                             borderRadius: 10,
+//                             padding: "10px 12px",
+//                           }}
+//                         >
+//                           <div
+//                             style={{
+//                               fontSize: 10,
+//                               color: "rgba(255,51,102,0.6)",
+//                               fontWeight: 600,
+//                               letterSpacing: "0.05em",
+//                               marginBottom: 4,
+//                             }}
+//                           >
+//                             NO
+//                           </div>
+//                           <div
+//                             style={{
+//                               fontSize: 16,
+//                               fontWeight: 700,
+//                               color: "#ff3366",
+//                               fontVariantNumeric: "tabular-nums",
+//                             }}
+//                           >
+//                             {position.noShares.toFixed(4)}
+//                           </div>
+//                         </div>
+//                       )}
+//                     </div>
+//                   )}
+
+//                   {/* Footer: invested / value / P&L / claim */}
+//                   <div
+//                     style={{
+//                       display: "flex",
+//                       alignItems: "center",
+//                       justifyContent: "space-between",
+//                       paddingTop: 12,
+//                       borderTop: "1px solid rgba(255,255,255,0.04)",
+//                     }}
+//                   >
+//                     <div
+//                       style={{ display: "flex", alignItems: "center", gap: 20 }}
+//                     >
+//                       <div>
+//                         <div
+//                           style={{
+//                             fontSize: 10,
+//                             color: "#3a4a5e",
+//                             marginBottom: 3,
+//                           }}
+//                         >
+//                           Invested
+//                         </div>
+//                         <div
+//                           style={{
+//                             fontSize: 13,
+//                             fontWeight: 600,
+//                             color: "#e2e8f0",
+//                             fontVariantNumeric: "tabular-nums",
+//                           }}
+//                         >
+//                           {fmtUSD(position.invested)}
+//                         </div>
+//                       </div>
+//                       {!status.canClaim && (
+//                         <>
+//                           <div>
+//                             <div
+//                               style={{
+//                                 fontSize: 10,
+//                                 color: "#3a4a5e",
+//                                 marginBottom: 3,
+//                               }}
+//                             >
+//                               Value
+//                             </div>
+//                             <div
+//                               style={{
+//                                 fontSize: 13,
+//                                 fontWeight: 600,
+//                                 color: "#e2e8f0",
+//                                 fontVariantNumeric: "tabular-nums",
+//                               }}
+//                             >
+//                               {fmtUSD(position.currentValue)}
+//                             </div>
+//                           </div>
+//                           <div>
+//                             <div
+//                               style={{
+//                                 fontSize: 10,
+//                                 color: "#3a4a5e",
+//                                 marginBottom: 3,
+//                               }}
+//                             >
+//                               P&amp;L
+//                             </div>
+//                             <div
+//                               style={{
+//                                 fontSize: 13,
+//                                 fontWeight: 600,
+//                                 color:
+//                                   position.profitLoss >= 0
+//                                     ? "#00ff88"
+//                                     : "#ff3366",
+//                                 fontVariantNumeric: "tabular-nums",
+//                                 display: "flex",
+//                                 alignItems: "center",
+//                                 gap: 3,
+//                               }}
+//                             >
+//                               {position.profitLoss >= 0 ? (
+//                                 <ArrowUpRight
+//                                   style={{ width: 12, height: 12 }}
+//                                 />
+//                               ) : (
+//                                 <ArrowDownRight
+//                                   style={{ width: 12, height: 12 }}
+//                                 />
+//                               )}
+//                               {position.profitLoss >= 0 ? "+" : ""}
+//                               {fmtUSD(Math.abs(position.profitLoss))}
+//                               <span style={{ fontSize: 10, opacity: 0.7 }}>
+//                                 ({profitPercent}%)
+//                               </span>
+//                             </div>
+//                           </div>
+//                         </>
+//                       )}
+//                     </div>
+
+//                     {status.canClaim && (
+//                       <button
+//                         onClick={(e) => handleClaim(position.marketId, e)}
+//                         disabled={claimingId === position.marketId}
+//                         style={{
+//                           display: "flex",
+//                           alignItems: "center",
+//                           gap: 6,
+//                           padding: "9px 16px",
+//                           background: "#00ff88",
+//                           color: "#000",
+//                           border: "none",
+//                           borderRadius: 9,
+//                           fontSize: 12,
+//                           fontWeight: 700,
+//                           fontFamily: "inherit",
+//                           cursor:
+//                             claimingId === position.marketId
+//                               ? "not-allowed"
+//                               : "pointer",
+//                           opacity: claimingId === position.marketId ? 0.6 : 1,
+//                           boxShadow: "0 0 16px rgba(0,255,136,0.3)",
+//                           transition: "opacity 0.15s",
+//                         }}
+//                         onMouseEnter={(e) => {
+//                           if (claimingId !== position.marketId)
+//                             e.currentTarget.style.opacity = "0.85";
+//                         }}
+//                         onMouseLeave={(e) => {
+//                           e.currentTarget.style.opacity =
+//                             claimingId === position.marketId ? "0.6" : "1";
+//                         }}
+//                       >
+//                         {claimingId === position.marketId ? (
+//                           <>
+//                             <Loader2
+//                               style={{
+//                                 width: 12,
+//                                 height: 12,
+//                                 animation: "spin 0.8s linear infinite",
+//                               }}
+//                             />{" "}
+//                             Claiming…
+//                           </>
+//                         ) : (
+//                           <>
+//                             <Trophy style={{ width: 12, height: 12 }} /> Claim{" "}
+//                             {fmtUSD(position.currentValue)}
+//                           </>
+//                         )}
+//                       </button>
+//                     )}
+//                   </div>
+//                 </div>
+//               );
+//             })}
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
+
 import { useState, useEffect } from "react";
 import {
   TrendingUp,
@@ -14,18 +975,14 @@ import {
   Clock,
   BarChart3,
 } from "lucide-react";
-import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../hooks/useAuth";
 import { MediaPreview } from "./MediaPreview";
 import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
 import { Prediction } from "../types/prediction";
 import { toast } from "sonner";
-import { CallData, Contract, RpcProvider, uint256 } from "starknet";
+import { CallData, RpcProvider, uint256 } from "starknet";
 
 const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
-const TOKEN_ADDRESS =
-  import.meta.env.VITE_USDC_ADDRESS ||
-  "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
 
 interface UserPosition {
   prediction: Prediction;
@@ -44,86 +1001,87 @@ interface PortfolioProps {
   onViewMarket: (id: string) => void;
 }
 
+const fmt = (n: number, decimals = 2) => n.toFixed(decimals);
+const fmtUSD = (n: number) => `$${fmt(n)}`;
+
+const STATUS_STYLES: Record<
+  string,
+  { color: string; bg: string; border: string }
+> = {
+  active: {
+    color: "#1F87FC",
+    bg: "rgba(31,135,252,0.08)",
+    border: "rgba(31,135,252,0.25)",
+  },
+  won: {
+    color: "#00ff88",
+    bg: "rgba(0,255,136,0.08)",
+    border: "rgba(0,255,136,0.25)",
+  },
+  claimed: {
+    color: "#00ff88",
+    bg: "rgba(0,255,136,0.05)",
+    border: "rgba(0,255,136,0.15)",
+  },
+  lost: {
+    color: "#ff3366",
+    bg: "rgba(255,51,102,0.05)",
+    border: "rgba(255,51,102,0.15)",
+  },
+};
+
 export function Portfolio({ onViewMarket }: PortfolioProps) {
   const { address, execute, isConnected, connect } = useAuth();
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
-  const [usdcBalance, setUsdcBalance] = useState<string>("0.00");
+  const [usdcBalance, setUsdcBalance] = useState("0.00");
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   useEffect(() => {
     if (!address) return;
-
     const fetchPortfolio = async () => {
       setLoading(true);
       try {
-        const marketsRes = await fetch(`${API_URL}/markets`);
+        const [marketsRes, posRes] = await Promise.all([
+          fetch(`${API_URL}/markets`),
+          fetch(`${API_URL}/positions/${address}`),
+        ]);
         const marketsData: ApiMarket[] = await marketsRes.json();
-        const posRes = await fetch(`${API_URL}/positions/${address}`);
         const myBets = await posRes.json();
 
         const activePositions: UserPosition[] = myBets
           .map((bet: any) => {
             const market = marketsData.find((m) => m.marketId === bet.marketId);
             if (!market) return null;
-
-            // 🟢 FIX: Correctly mapped to your indexer's DB schema
-            const poolYes = Number(market.poolYes || 0);
-            const poolNo = Number(market.poolNo || 0);
-            const totalPot = poolYes + poolNo;
-
-            const totalYesReal = Number(market.yesShares || 0);
-            const totalNoReal = Number(market.noShares || 0);
-
-            const formattedPrediction = mapMarketToPrediction(market);
             const yesShares = Number(bet.yesShares);
             const noShares = Number(bet.noShares);
-
             const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
             if (!claimed && yesShares <= 0 && noShares <= 0) return null;
-
             const realInvested = Number(
               bet.totalInvested || bet.total_invested || 0,
             );
             const costBasis =
               realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
-
             let currentRealValue = 0;
-
             if (claimed || market.status === 3) {
               const isYesWinner = market.outcome === true;
-
-              // 1. Get the user's winning shares
               const winningShares = isYesWinner ? yesShares : noShares;
-
-              // 2. Get the TOTAL real shares for the winning side
               const totalWinningReal = isYesWinner
                 ? Number(market.yesShares || 0)
                 : Number(market.noShares || 0);
-
-              // 3. Get the REAL money in the pot (Ignore poolYes/poolNo!)
               const totalRealVolume = Number(market.totalVolume || 0);
-
               if (totalWinningReal > 0 && winningShares > 0) {
-                // Calculate their exact percentage of the winning pool
-                const ownership = winningShares / totalWinningReal;
-
-                // Multiply their percentage by the real money pot
-                const grossPayout = ownership * totalRealVolume;
-
-                // Apply the 2% fee your smart contract charges
-                currentRealValue = grossPayout * 0.98;
+                currentRealValue =
+                  (winningShares / totalWinningReal) * totalRealVolume * 0.98;
               }
             } else {
-              // NO MORE calculateValue() calls! Just straight math for active markets:
-              const valYes = yesShares * Number(market.yesPrice || 0);
-              const valNo = noShares * Number(market.noPrice || 0);
-              currentRealValue = valYes + valNo;
+              currentRealValue =
+                yesShares * Number(market.yesPrice || 0) +
+                noShares * Number(market.noPrice || 0);
             }
-
             return {
-              prediction: formattedPrediction,
+              prediction: mapMarketToPrediction(market),
               marketId: market.marketId.toString(),
               yesShares,
               noShares,
@@ -136,401 +1094,470 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
             };
           })
           .filter(Boolean);
-
         setPositions(activePositions);
-      } catch (error) {
-        console.error("Error fetching portfolio", error);
+      } catch (e) {
+        console.error("Error fetching portfolio", e);
       } finally {
         setLoading(false);
       }
     };
-
     fetchPortfolio();
   }, [address]);
 
   useEffect(() => {
     if (!address || !isConnected) return;
-
     const fetchBalance = async () => {
-      // We only need the address to check the balance, we don't need the account object anymore
-      if (!address) return;
-
       setBalanceLoading(true);
       try {
         const usdcAddress =
           import.meta.env.VITE_USDC_ADDRESS ||
-          "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"; // Mainnet Bridged USDC
-
-        // 🟢 1. Create a dedicated provider using your Alchemy URL
-        const alchemyProvider = new RpcProvider({
+          "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+        const provider = new RpcProvider({
           nodeUrl:
             import.meta.env.VITE_NODE_URL ||
             "https://starknet-mainnet.g.alchemy.com/v2/EzO62qQ-wC9-OQyeOyL1y",
         });
-
-        // 🟢 2. Call the contract using YOUR provider, not the user's wallet
-        const res = await alchemyProvider.callContract({
+        const res = await provider.callContract({
           contractAddress: usdcAddress,
           entrypoint: "balanceOf",
           calldata: CallData.compile([address]),
         });
-
-        const balanceStats = {
-          low: res[0],
-          high: res[1],
-        };
-
-        const balanceBN = uint256.uint256ToBN(balanceStats);
-        const balanceString = balanceBN.toString();
-        const formatted = Number(balanceString) / 1_000_000;
-
-        setUsdcBalance(formatted.toFixed(2));
-      } catch (e) {
-        console.error("Failed to fetch USDC balance", e);
+        const balanceBN = uint256.uint256ToBN({ low: res[0], high: res[1] });
+        setUsdcBalance((Number(balanceBN.toString()) / 1_000_000).toFixed(2));
+      } catch {
         setUsdcBalance("0.00");
       } finally {
         setBalanceLoading(false);
       }
     };
     fetchBalance();
-    const interval = setInterval(fetchBalance, 10000);
-    return () => clearInterval(interval);
+    const iv = setInterval(fetchBalance, 10000);
+    return () => clearInterval(iv);
   }, [address, isConnected]);
 
- const handleClaim = async (marketId: string, e: React.MouseEvent) => {
-  e.stopPropagation();
-  if (!isConnected) return;
-
-  setClaimingId(marketId);
-  try {
-    const tx = await execute([{          // ✅ array, not object
-      contractAddress:
-        import.meta.env.VITE_HUB_ADDRESS ||
-        "0x530a3d485be7ba47ce511cf0da87d805a4d3de3d0828556ec74659d4018952f",
-      entrypoint: "claim_winnings",
-      calldata: CallData.compile([marketId]),
-    }]);
-
-    toast.success("Winnings Claimed!");
-    setPositions((prev) =>
-      prev.map((p) =>
-        p.marketId === marketId ? { ...p, hasClaimed: true } : p,
-      ),
-    );
-  } catch (err: any) {
-    toast.error("Claim Failed", { description: err.message });
-  } finally {
-    setClaimingId(null);
-  }
-};
-
-  const getPositionStatus = (pos: UserPosition) => {
-    if (pos.status === 1) return { type: "active", label: "Active" };
-    const userWonYes = pos.outcome === true && pos.yesShares > 0;
-    const userWonNo = pos.outcome === false && pos.noShares > 0;
-
-    if (userWonYes || userWonNo) {
-      if (pos.hasClaimed) {
-        return { type: "claimed", label: "Claimed", canClaim: false };
-      }
-      return { type: "won", label: "Won", canClaim: true };
+  const handleClaim = async (marketId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isConnected) return;
+    setClaimingId(marketId);
+    try {
+      await execute([
+        {
+          contractAddress: import.meta.env.VITE_HUB_ADDRESS,
+          entrypoint: "claim_winnings",
+          calldata: CallData.compile([marketId]),
+        },
+      ]);
+      toast.success("Winnings claimed!");
+      setPositions((prev) =>
+        prev.map((p) =>
+          p.marketId === marketId ? { ...p, hasClaimed: true } : p,
+        ),
+      );
+    } catch (err: any) {
+      toast.error("Claim failed", { description: err.message });
+    } finally {
+      setClaimingId(null);
     }
-    return { type: "lost", label: "Lost" };
   };
 
-  const totalInvested = positions.reduce((sum, p) => sum + p.invested, 0);
-  const totalValue = positions.reduce((sum, p) => sum + p.currentValue, 0);
-  const totalProfitLoss = positions.reduce((sum, p) => sum + p.profitLoss, 0);
-  const profitLossPercent =
-    totalInvested > 0
-      ? ((totalProfitLoss / totalInvested) * 100).toFixed(2)
-      : "0.00";
+  const getPositionStatus = (pos: UserPosition) => {
+    if (pos.status === 1)
+      return { type: "active", label: "Active", canClaim: false };
+    const userWon =
+      (pos.outcome === true && pos.yesShares > 0) ||
+      (pos.outcome === false && pos.noShares > 0);
+    if (userWon)
+      return pos.hasClaimed
+        ? { type: "claimed", label: "Claimed", canClaim: false }
+        : { type: "won", label: "Won", canClaim: true };
+    return { type: "lost", label: "Lost", canClaim: false };
+  };
 
-  // Calculate additional stats
+  const totalInvested = positions.reduce((s, p) => s + p.invested, 0);
+  const totalValue = positions.reduce((s, p) => s + p.currentValue, 0);
+  const totalPL = positions.reduce((s, p) => s + p.profitLoss, 0);
+  const plPercent =
+    totalInvested > 0 ? ((totalPL / totalInvested) * 100).toFixed(2) : "0.00";
   const activePositions = positions.filter((p) => p.status === 1);
   const resolvedPositions = positions.filter((p) => p.status === 3);
   const wonPositions = resolvedPositions.filter((p) => {
-    const status = getPositionStatus(p);
-    return status.type === "won" || status.type === "claimed";
+    const s = getPositionStatus(p);
+    return s.type === "won" || s.type === "claimed";
   });
 
+  // ── Not connected ──
   if (!address) {
     return (
-      <div className="w-full max-w-2xl mx-auto px-4 py-20">
-        <div className="relative bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#0f0f1a] border border-[#1F87FC]/30 rounded-2xl p-12 flex flex-col items-center overflow-hidden">
-          {/* Animated background effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#1F87FC]/5 via-transparent to-[#00ff88]/5 animate-pulse" />
-
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="relative mb-6">
-              <div className="absolute inset-0 bg-[#1F87FC]/20 blur-2xl rounded-full animate-pulse" />
-              <Wallet className="relative w-16 h-16 text-[#1F87FC]" />
-            </div>
-
-            <h2 className="text-2xl font-bold text-white mb-3">
-              Connect Your Wallet
-            </h2>
-            <p className="text-muted-foreground mb-8 text-center max-w-sm">
-              Track your predictions, view performance metrics, and claim your
-              winnings
-            </p>
-
-            <button
-             
-              className="group relative bg-gradient-to-r from-[#1F87FC] to-[#1F87FC]/80 text-white px-8 py-3 rounded-xl font-bold transition-all hover:shadow-[0_0_30px_rgba(31,135,252,0.4)] hover:scale-105"
-            >
-              <span className="relative z-10">Connect Wallet</span>
-              <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            </button>
+      <div className="w-full max-w-lg mx-auto px-4 py-10">
+        <div
+          style={{
+            background: "#12121f",
+            border: "1px solid rgba(31,135,252,0.18)",
+            borderRadius: 18,
+            padding: "48px 24px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: "50%",
+              background: "rgba(31,135,252,0.08)",
+              border: "1px solid rgba(31,135,252,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 16,
+            }}
+          >
+            <Wallet style={{ width: 22, height: 22, color: "#1F87FC" }} />
           </div>
+          <h2
+            style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: "#e2e8f0",
+              margin: "0 0 8px",
+            }}
+          >
+            Connect your wallet
+          </h2>
+          <p
+            style={{
+              fontSize: 13,
+              color: "#4a5568",
+              margin: "0 0 24px",
+              maxWidth: 260,
+              lineHeight: 1.6,
+            }}
+          >
+            Track your predictions, view performance, and claim winnings.
+          </p>
+          <button
+            onClick={() => connect("web3")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 22px",
+              background: "#1F87FC",
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              boxShadow: "0 0 16px rgba(31,135,252,0.25)",
+            }}
+          >
+            <Wallet style={{ width: 14, height: 14 }} /> Connect wallet
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              Portfolio
-              {(loading || balanceLoading) && (
-                <Loader2 className="w-6 h-6 text-[#1F87FC] animate-spin" />
-              )}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Track your prediction investments and performance
-            </p>
-          </div>
+    <div
+      className="w-full max-w-4xl mx-auto px-4 py-6 pb-24 flex flex-col gap-4"
+      style={{ fontFamily: "inherit" }}
+    >
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            background: "rgba(31,135,252,0.08)",
+            border: "1px solid rgba(31,135,252,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <PieChart style={{ width: 15, height: 15, color: "#1F87FC" }} />
+        </div>
+        <div>
+          <h1
+            style={{
+              fontSize: 17,
+              fontWeight: 600,
+              color: "#e2e8f0",
+              margin: 0,
+              lineHeight: 1.2,
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            Portfolio
+            {(loading || balanceLoading) && (
+              <Loader2
+                style={{
+                  width: 13,
+                  height: 13,
+                  color: "#1F87FC",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+            )}
+          </h1>
+          <p
+            style={{ fontSize: 11, color: "#4a5568", margin: 0, marginTop: 1 }}
+          >
+            Track your investments and performance
+          </p>
         </div>
       </div>
 
-      {/* Stats Grid - Enhanced */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Balance Card */}
-        <div className="group relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border border-[#1F87FC]/30 rounded-xl p-6 hover:border-[#1F87FC]/60 transition-all hover:shadow-[0_0_20px_rgba(31,135,252,0.1)]">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Wallet className="w-20 h-20 text-[#1F87FC]" />
+      {/* ── Stats grid — 2 cols on mobile, 4 on md ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+        {[
+          {
+            icon: <CreditCard style={{ width: 12, height: 12 }} />,
+            label: "Balance",
+            value: `$${usdcBalance}`,
+            sub: "USDC",
+            color: "#1F87FC",
+          },
+          {
+            icon: <DollarSign style={{ width: 12, height: 12 }} />,
+            label: "Invested",
+            value: fmtUSD(totalInvested),
+            sub: `${positions.length} position${positions.length !== 1 ? "s" : ""}`,
+            color: "#1F87FC",
+          },
+          {
+            icon: <PieChart style={{ width: 12, height: 12 }} />,
+            label: "Current value",
+            value: fmtUSD(totalValue),
+            sub: `${activePositions.length} active`,
+            color: "#1F87FC",
+          },
+          {
+            icon: <Trophy style={{ width: 12, height: 12 }} />,
+            label: "Win rate",
+            value: `${resolvedPositions.length > 0 ? ((wonPositions.length / resolvedPositions.length) * 100).toFixed(0) : 0}%`,
+            sub: `${wonPositions.length}/${resolvedPositions.length} won`,
+            color: "#00ff88",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            style={{
+              background: "rgba(255,255,255,0.03)",
+              border: `1px solid ${stat.color}18`,
+              borderRadius: 12,
+              padding: "12px 12px 10px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                color: stat.color,
+                opacity: 0.7,
+                marginBottom: 7,
+              }}
+            >
+              {stat.icon}
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {stat.label}
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#e2e8f0",
+                fontVariantNumeric: "tabular-nums",
+                letterSpacing: "-0.02em",
+                marginBottom: 2,
+              }}
+            >
+              {stat.value}
+            </div>
+            <div style={{ fontSize: 10, color: "#3a4a5e" }}>{stat.sub}</div>
           </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-[#1F87FC]/10 rounded-lg">
-                <CreditCard className="w-4 h-4 text-[#1F87FC]" />
-              </div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Available Balance
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-foreground mb-1">
-              ${usdcBalance}
-            </div>
-            <div className="text-xs text-[#1F87FC]">USDC</div>
-          </div>
-        </div>
-
-        {/* Total Invested */}
-        <div className="group relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border border-[#1F87FC]/30 rounded-xl p-6 hover:border-[#1F87FC]/60 transition-all hover:shadow-[0_0_20px_rgba(31,135,252,0.1)]">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <DollarSign className="w-20 h-20 text-[#1F87FC]" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-[#1F87FC]/10 rounded-lg">
-                <DollarSign className="w-4 h-4 text-[#1F87FC]" />
-              </div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Total Invested
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-foreground mb-1">
-              ${totalInvested.toFixed(2)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {positions.length} position{positions.length !== 1 ? "s" : ""}
-            </div>
-          </div>
-        </div>
-
-        {/* Current Value */}
-        <div className="group relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border border-[#1F87FC]/30 rounded-xl p-6 hover:border-[#1F87FC]/60 transition-all hover:shadow-[0_0_20px_rgba(31,135,252,0.1)]">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <PieChart className="w-20 h-20 text-[#1F87FC]" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-[#1F87FC]/10 rounded-lg">
-                <PieChart className="w-4 h-4 text-[#1F87FC]" />
-              </div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Current Value
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-foreground mb-1">
-              ${totalValue.toFixed(2)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {activePositions.length} active
-            </div>
-          </div>
-        </div>
-
-        {/* Win Rate */}
-        <div className="group relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border border-[#1F87FC]/30 rounded-xl p-6 hover:border-[#1F87FC]/60 transition-all hover:shadow-[0_0_20px_rgba(31,135,252,0.1)]">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <BarChart3 className="w-20 h-20 text-[#00ff88]" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-[#00ff88]/10 rounded-lg">
-                <Trophy className="w-4 h-4 text-[#00ff88]" />
-              </div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Win Rate
-              </div>
-            </div>
-            <div className="text-3xl font-bold text-foreground mb-1">
-              {resolvedPositions.length > 0
-                ? (
-                    (wonPositions.length / resolvedPositions.length) *
-                    100
-                  ).toFixed(0)
-                : "0"}
-              %
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {wonPositions.length}/{resolvedPositions.length} won
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* P&L Summary - Enhanced */}
+      {/* ── P&L banner ── */}
       {totalInvested > 0 && (
         <div
-          className={`relative overflow-hidden rounded-2xl p-6 mb-8 border backdrop-blur-sm ${
-            totalProfitLoss >= 0
-              ? "bg-gradient-to-r from-[#00ff88]/10 via-[#00ff88]/5 to-transparent border-[#00ff88]/30"
-              : "bg-gradient-to-r from-[#ff3366]/10 via-[#ff3366]/5 to-transparent border-[#ff3366]/30"
-          }`}
+          style={{
+            background:
+              totalPL >= 0 ? "rgba(0,255,136,0.05)" : "rgba(255,51,102,0.05)",
+            border: `1px solid ${totalPL >= 0 ? "rgba(0,255,136,0.2)" : "rgba(255,51,102,0.2)"}`,
+            borderRadius: 14,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
         >
-          <div className="absolute top-0 right-0 w-64 h-64 opacity-10">
-            {totalProfitLoss >= 0 ? (
-              <TrendingUp className="w-full h-full text-[#00ff88]" />
-            ) : (
-              <TrendingDown className="w-full h-full text-[#ff3366]" />
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                background:
+                  totalPL >= 0 ? "rgba(0,255,136,0.1)" : "rgba(255,51,102,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {totalPL >= 0 ? (
+                <ArrowUpRight
+                  style={{ width: 16, height: 16, color: "#00ff88" }}
+                />
+              ) : (
+                <ArrowDownRight
+                  style={{ width: 16, height: 16, color: "#ff3366" }}
+                />
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "#4a5568", marginBottom: 2 }}>
+                Total profit / loss
+              </div>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: totalPL >= 0 ? "#00ff88" : "#ff3366",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {totalPL >= 0 ? "+" : ""}
+                {fmtUSD(totalPL)}
+              </div>
+            </div>
           </div>
-
-          <div className="relative z-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`p-3 rounded-xl ${
-                    totalProfitLoss >= 0 ? "bg-[#00ff88]/20" : "bg-[#ff3366]/20"
-                  }`}
-                >
-                  {totalProfitLoss >= 0 ? (
-                    <ArrowUpRight className="w-6 h-6 text-[#00ff88]" />
-                  ) : (
-                    <ArrowDownRight className="w-6 h-6 text-[#ff3366]" />
-                  )}
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground font-medium mb-1">
-                    Total Profit/Loss
-                  </div>
-                  <div
-                    className={`text-4xl font-bold ${
-                      totalProfitLoss >= 0 ? "text-[#00ff88]" : "text-[#ff3366]"
-                    }`}
-                  >
-                    {totalProfitLoss >= 0 ? "+" : ""}$
-                    {totalProfitLoss.toFixed(2)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground mb-1">Return</div>
-                <div
-                  className={`text-3xl font-bold ${
-                    totalProfitLoss >= 0 ? "text-[#00ff88]" : "text-[#ff3366]"
-                  }`}
-                >
-                  {totalProfitLoss >= 0 ? "+" : ""}
-                  {profitLossPercent}%
-                </div>
-              </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 10, color: "#4a5568", marginBottom: 2 }}>
+              Return
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: totalPL >= 0 ? "#00ff88" : "#ff3366",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {totalPL >= 0 ? "+" : ""}
+              {plPercent}%
             </div>
           </div>
         </div>
       )}
 
-      {/* Positions List - Enhanced */}
-      <div className="mb-4">
-        <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Clock className="w-5 h-5 text-[#1F87FC]" />
-          Your Positions
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          {positions.length} total position{positions.length !== 1 ? "s" : ""}
-        </p>
-      </div>
+      {/* ── Positions ── */}
+      <div>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: "#64748b",
+            letterSpacing: "0.04em",
+            marginBottom: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          <Clock style={{ width: 11, height: 11 }} />
+          Your positions · {positions.length} total
+        </div>
 
-      {!loading && positions.length === 0 ? (
-        <div className="relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border border-[#1F87FC]/20 rounded-2xl p-16 text-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#1F87FC]/5 to-transparent animate-pulse" />
-
-          <div className="relative z-10">
-            <div className="relative inline-block mb-6">
-              <div className="absolute inset-0 bg-[#1F87FC]/10 blur-2xl rounded-full" />
-              <PieChart className="relative w-16 h-16 mx-auto text-[#1F87FC]/50" />
-            </div>
-
-            <h4 className="text-xl font-bold text-foreground mb-2">
-              No Active Positions
-            </h4>
-            <p className="text-muted-foreground max-w-sm mx-auto">
-              Start trading predictions to build your portfolio and track your
-              performance
+        {!loading && positions.length === 0 ? (
+          <div
+            style={{
+              background: "#12121f",
+              border: "1px solid rgba(31,135,252,0.1)",
+              borderRadius: 14,
+              padding: "48px 20px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <PieChart style={{ width: 28, height: 28, color: "#3a4a5e" }} />
+            <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
+              No active positions
+            </p>
+            <p style={{ fontSize: 11, color: "#3a4a5e", margin: 0 }}>
+              Start trading predictions to build your portfolio
             </p>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {positions.map((position) => {
-            const status = getPositionStatus(position);
-            const isWinning =
-              status.type === "won" || status.type === "claimed";
-            const profitPercent =
-              position.invested > 0
-                ? ((position.profitLoss / position.invested) * 100).toFixed(1)
-                : "0.0";
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {positions.map((position) => {
+              const status = getPositionStatus(position);
+              const ss = STATUS_STYLES[status.type] || STATUS_STYLES.active;
+              const profitPercent =
+                position.invested > 0
+                  ? ((position.profitLoss / position.invested) * 100).toFixed(1)
+                  : "0.0";
 
-            return (
-              <div
-                key={position.marketId}
-                className={`group relative bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] border rounded-2xl p-6 transition-all hover:scale-[1.01] ${
-                  status.type === "won" && !position.hasClaimed
-                    ? "border-[#00ff88]/50 shadow-[0_0_25px_rgba(0,255,136,0.15)] hover:shadow-[0_0_35px_rgba(0,255,136,0.25)]"
-                    : status.type === "claimed"
-                      ? "border-[#00ff88]/30 hover:border-[#00ff88]/50"
-                      : status.type === "lost"
-                        ? "border-[#ff3366]/30 hover:border-[#ff3366]/50"
-                        : "border-[#1F87FC]/30 hover:border-[#1F87FC]/60"
-                }`}
-              >
-                {/* Glow effect for winning positions */}
-                {isWinning && !position.hasClaimed && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#00ff88]/5 via-transparent to-[#00ff88]/5 rounded-2xl animate-pulse" />
-                )}
-
-                <div className="relative z-10">
-                  {/* Prediction Info */}
-                  <div className="flex items-start gap-4 mb-5">
-                    <div className="w-20 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-border/50 group-hover:border-border transition-colors">
+              return (
+                <div
+                  key={position.marketId}
+                  style={{
+                    background: "#12121f",
+                    border: `1px solid ${ss.border}`,
+                    borderRadius: 14,
+                    padding: "14px 14px",
+                    boxShadow:
+                      status.type === "won" && !position.hasClaimed
+                        ? "0 0 18px rgba(0,255,136,0.07)"
+                        : "none",
+                  }}
+                >
+                  {/* Top row: media + question + badge */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 60,
+                        height: 46,
+                        flexShrink: 0,
+                        borderRadius: 7,
+                        overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                        background: "#0d0d18",
+                      }}
+                    >
                       <MediaPreview
                         src={position.prediction.media.url}
                         type={
@@ -538,166 +1565,330 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
                             ? "video"
                             : undefined
                         }
-                        alt="prediction"
-                        className="w-full h-full object-cover"
+                        alt="market"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
                       />
                     </div>
-
                     <div
-                      className="flex-1 min-w-0 cursor-pointer"
+                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
                       onClick={() => onViewMarket(position.marketId)}
                     >
-                      <p className="text-foreground font-medium mb-2 line-clamp-2 group-hover:text-[#1F87FC] transition-colors">
+                      <p
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "#e2e8f0",
+                          margin: "0 0 6px",
+                          lineHeight: 1.4,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
                         {position.prediction.question}
                       </p>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-muted-foreground bg-[#1F87FC]/10 px-2 py-1 rounded-md">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#4a5568",
+                            background: "rgba(255,255,255,0.04)",
+                            borderRadius: 4,
+                            padding: "2px 6px",
+                          }}
+                        >
                           {position.prediction.creator.name}
                         </span>
-
-                        {status.type === "active" && (
-                          <span className="text-[10px] font-bold text-[#1F87FC] bg-[#1F87FC]/10 px-2 py-1 rounded-md border border-[#1F87FC]/30 flex items-center gap-1">
-                            <div className="w-1.5 h-1.5 bg-[#1F87FC] rounded-full animate-pulse" />
-                            ACTIVE
-                          </span>
-                        )}
-
-                        {status.type === "won" && (
-                          <span className="text-[10px] font-bold text-[#00ff88] bg-[#00ff88]/10 px-2 py-1 rounded-md border border-[#00ff88]/30 flex items-center gap-1 animate-pulse">
-                            <Trophy className="w-3 h-3" />
-                            WON
-                          </span>
-                        )}
-
-                        {status.type === "claimed" && (
-                          <span className="text-[10px] font-bold text-[#00ff88] bg-[#00ff88]/10 px-2 py-1 rounded-md border border-[#00ff88]/30 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            CLAIMED
-                          </span>
-                        )}
-
-                        {status.type === "lost" && (
-                          <span className="text-[10px] font-bold text-[#ff3366] bg-[#ff3366]/10 px-2 py-1 rounded-md border border-[#ff3366]/30">
-                            LOST
-                          </span>
-                        )}
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: ss.color,
+                            background: ss.bg,
+                            border: `1px solid ${ss.border}`,
+                            borderRadius: 4,
+                            padding: "2px 6px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 3,
+                          }}
+                        >
+                          {status.type === "active" && (
+                            <span
+                              style={{
+                                width: 4,
+                                height: 4,
+                                borderRadius: "50%",
+                                background: "#1F87FC",
+                                display: "inline-block",
+                              }}
+                            />
+                          )}
+                          {status.type === "won" && (
+                            <Trophy style={{ width: 8, height: 8 }} />
+                          )}
+                          {status.type === "claimed" && (
+                            <CheckCircle style={{ width: 8, height: 8 }} />
+                          )}
+                          {status.label}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Shares Grid */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    {position.yesShares > 0 && (
-                      <div className="bg-[#00ff88]/5 border border-[#00ff88]/30 rounded-xl p-4 hover:bg-[#00ff88]/10 transition-colors">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2 h-2 bg-[#00ff88] rounded-full" />
-                          <div className="text-xs text-muted-foreground font-medium">
-                            YES Shares
+                  {/* Shares — 2 cols if both, 1 col if only one */}
+                  {(position.yesShares > 0 || position.noShares > 0) && (
+                    <div
+                      className={`grid gap-2 mb-3 ${position.yesShares > 0 && position.noShares > 0 ? "grid-cols-2" : "grid-cols-1"}`}
+                    >
+                      {position.yesShares > 0 && (
+                        <div
+                          style={{
+                            background: "rgba(0,255,136,0.04)",
+                            border: "1px solid rgba(0,255,136,0.18)",
+                            borderRadius: 8,
+                            padding: "8px 10px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: "rgba(0,255,136,0.6)",
+                              fontWeight: 700,
+                              letterSpacing: "0.07em",
+                              marginBottom: 3,
+                            }}
+                          >
+                            YES
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: "#00ff88",
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {position.yesShares.toFixed(4)}
                           </div>
                         </div>
-                        <div className="text-[#00ff88] font-mono font-bold text-lg">
-                          {position.yesShares.toFixed(4)}
-                        </div>
-                      </div>
-                    )}
-
-                    {position.noShares > 0 && (
-                      <div className="bg-[#ff3366]/5 border border-[#ff3366]/30 rounded-xl p-4 hover:bg-[#ff3366]/10 transition-colors">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2 h-2 bg-[#ff3366] rounded-full" />
-                          <div className="text-xs text-muted-foreground font-medium">
-                            NO Shares
+                      )}
+                      {position.noShares > 0 && (
+                        <div
+                          style={{
+                            background: "rgba(255,51,102,0.04)",
+                            border: "1px solid rgba(255,51,102,0.18)",
+                            borderRadius: 8,
+                            padding: "8px 10px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: "rgba(255,51,102,0.6)",
+                              fontWeight: 700,
+                              letterSpacing: "0.07em",
+                              marginBottom: 3,
+                            }}
+                          >
+                            NO
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: "#ff3366",
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {position.noShares.toFixed(4)}
                           </div>
                         </div>
-                        <div className="text-[#ff3366] font-mono font-bold text-lg">
-                          {position.noShares.toFixed(4)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Performance Footer */}
-                  <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                    <div className="flex items-center gap-6">
-                      <div>
-                        <div className="text-xs text-muted-foreground mb-1">
-                          Invested
-                        </div>
-                        <div className="text-foreground font-bold">
-                          ${position.invested.toFixed(2)}
-                        </div>
-                      </div>
-
-                      {!status.canClaim && (
-                        <>
-                          <div>
-                            <div className="text-xs text-muted-foreground mb-1">
-                              Current Value
-                            </div>
-                            <div className="text-foreground font-bold">
-                              ${position.currentValue.toFixed(2)}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="text-xs text-muted-foreground mb-1">
-                              P&L
-                            </div>
-                            <div
-                              className={`font-bold flex items-center gap-1 ${
-                                position.profitLoss >= 0
-                                  ? "text-[#00ff88]"
-                                  : "text-[#ff3366]"
-                              }`}
-                            >
-                              {position.profitLoss >= 0 ? (
-                                <ArrowUpRight className="w-3 h-3" />
-                              ) : (
-                                <ArrowDownRight className="w-3 h-3" />
-                              )}
-                              {position.profitLoss >= 0 ? "+" : ""}$
-                              {Math.abs(position.profitLoss).toFixed(2)}
-                              <span className="text-xs">
-                                ({position.profitLoss >= 0 ? "+" : ""}
-                                {profitPercent}%)
-                              </span>
-                            </div>
-                          </div>
-                        </>
                       )}
                     </div>
+                  )}
 
-                    {status.canClaim && (
-                      <button
-                        onClick={(e) => handleClaim(position.marketId, e)}
-                        disabled={claimingId === position.marketId}
-                        className="relative group/btn bg-gradient-to-r from-[#00ff88] to-[#00ff88]/80 text-black px-6 py-3 rounded-xl text-sm font-bold hover:shadow-[0_0_25px_rgba(0,255,136,0.5)] transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 overflow-hidden"
+                  {/* Footer — stacks on mobile */}
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(255,255,255,0.04)",
+                      paddingTop: 10,
+                    }}
+                  >
+                    {status.canClaim ? (
+                      /* Claim layout: stats row + full-width button */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                        }}
                       >
-                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover/btn:opacity-100 transition-opacity" />
-
-                        <span className="relative z-10 flex items-center gap-2">
+                        <div style={{ display: "flex", gap: 16 }}>
+                          <StatCell
+                            label="Invested"
+                            value={fmtUSD(position.invested)}
+                          />
+                          <StatCell
+                            label="Payout"
+                            value={fmtUSD(position.currentValue)}
+                            color="#00ff88"
+                          />
+                        </div>
+                        <button
+                          onClick={(e) => handleClaim(position.marketId, e)}
+                          disabled={claimingId === position.marketId}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            padding: "10px 0",
+                            background: "#00ff88",
+                            color: "#000",
+                            border: "none",
+                            borderRadius: 9,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            fontFamily: "inherit",
+                            cursor:
+                              claimingId === position.marketId
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity: claimingId === position.marketId ? 0.6 : 1,
+                            boxShadow: "0 0 14px rgba(0,255,136,0.3)",
+                            transition: "opacity 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (claimingId !== position.marketId)
+                              e.currentTarget.style.opacity = "0.85";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity =
+                              claimingId === position.marketId ? "0.6" : "1";
+                          }}
+                        >
                           {claimingId === position.marketId ? (
                             <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Claiming...
+                              <Loader2
+                                style={{
+                                  width: 13,
+                                  height: 13,
+                                  animation: "spin 0.8s linear infinite",
+                                }}
+                              />{" "}
+                              Claiming…
                             </>
                           ) : (
                             <>
-                              <Trophy className="w-4 h-4" />
-                              CLAIM ${position.currentValue.toFixed(2)}
+                              <Trophy style={{ width: 13, height: 13 }} /> Claim{" "}
+                              {fmtUSD(position.currentValue)}
                             </>
                           )}
-                        </span>
-                      </button>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Normal layout: 3 stats in a row, wraps gracefully */
+                      <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        <StatCell
+                          label="Invested"
+                          value={fmtUSD(position.invested)}
+                        />
+                        <StatCell
+                          label="Value"
+                          value={fmtUSD(position.currentValue)}
+                        />
+                        <StatCell
+                          label="P&L"
+                          value={
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 2,
+                                color:
+                                  position.profitLoss >= 0
+                                    ? "#00ff88"
+                                    : "#ff3366",
+                              }}
+                            >
+                              {position.profitLoss >= 0 ? (
+                                <ArrowUpRight
+                                  style={{ width: 11, height: 11 }}
+                                />
+                              ) : (
+                                <ArrowDownRight
+                                  style={{ width: 11, height: 11 }}
+                                />
+                              )}
+                              {position.profitLoss >= 0 ? "+" : ""}
+                              {fmtUSD(Math.abs(position.profitLoss))}
+                              <span style={{ fontSize: 9, opacity: 0.65 }}>
+                                ({profitPercent}%)
+                              </span>
+                            </span>
+                          }
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: React.ReactNode;
+  color?: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 9,
+          color: "#3a4a5e",
+          marginBottom: 2,
+          letterSpacing: "0.03em",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: color || "#e2e8f0",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
