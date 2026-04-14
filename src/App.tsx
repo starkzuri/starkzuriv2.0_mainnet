@@ -12,6 +12,7 @@ import { MarketDetail } from "./components/MarketDetail";
 import { Rewards } from "./components/Rewards";
 import { LoginModal } from "./components/LoginModal";
 import { toast, Toaster } from "sonner";
+import { LiveTradingChart } from "./components/live/LiveTradingChart";
 // import { LiveActionFeed } from "./components/LiveActionFeed";
 
 type Screen =

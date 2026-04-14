@@ -61,7 +61,15 @@ const VIEW_TABS: {
   },
 ];
 
-const CATEGORIES = ["all", "Crypto", "Tech", "Sports", "Space", "Politics"];
+const CATEGORIES = [
+  "all",
+  "Crypto",
+  "Tech",
+  "Sports",
+  "Space",
+  "Politics",
+  "live",
+];
 
 export function MarketExplore({ onViewMarket }: MarketExploreProps) {
   const { address } = useAuth();
