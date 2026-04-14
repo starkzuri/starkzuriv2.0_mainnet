@@ -1,964 +1,3 @@
-// import { useState, useEffect } from "react";
-// import {
-//   TrendingUp,
-//   TrendingDown,
-//   DollarSign,
-//   PieChart,
-//   Loader2,
-//   Wallet,
-//   Trophy,
-//   CheckCircle,
-//   CreditCard,
-//   ArrowUpRight,
-//   ArrowDownRight,
-//   Clock,
-//   BarChart3,
-// } from "lucide-react";
-// import { useAuth } from "../hooks/useAuth";
-// import { MediaPreview } from "./MediaPreview";
-// import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
-// import { Prediction } from "../types/prediction";
-// import { toast } from "sonner";
-// import { CallData, RpcProvider, uint256 } from "starknet";
-
-// const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
-
-// interface UserPosition {
-//   prediction: Prediction;
-//   marketId: string;
-//   yesShares: number;
-//   noShares: number;
-//   invested: number;
-//   currentValue: number;
-//   profitLoss: number;
-//   status: number;
-//   outcome?: boolean;
-//   hasClaimed: boolean;
-// }
-
-// interface PortfolioProps {
-//   onViewMarket: (id: string) => void;
-// }
-
-// const fmt = (n: number, decimals = 2) => n.toFixed(decimals);
-// const fmtUSD = (n: number) => `$${fmt(n)}`;
-
-// export function Portfolio({ onViewMarket }: PortfolioProps) {
-//   const { address, execute, isConnected, connect } = useAuth();
-//   const [positions, setPositions] = useState<UserPosition[]>([]);
-//   const [loading, setLoading] = useState(false);
-//   const [claimingId, setClaimingId] = useState<string | null>(null);
-//   const [usdcBalance, setUsdcBalance] = useState("0.00");
-//   const [balanceLoading, setBalanceLoading] = useState(false);
-
-//   useEffect(() => {
-//     if (!address) return;
-//     const fetchPortfolio = async () => {
-//       setLoading(true);
-//       try {
-//         const [marketsRes, posRes] = await Promise.all([
-//           fetch(`${API_URL}/markets`),
-//           fetch(`${API_URL}/positions/${address}`),
-//         ]);
-//         const marketsData: ApiMarket[] = await marketsRes.json();
-//         const myBets = await posRes.json();
-
-//         const activePositions: UserPosition[] = myBets
-//           .map((bet: any) => {
-//             const market = marketsData.find((m) => m.marketId === bet.marketId);
-//             if (!market) return null;
-//             const yesShares = Number(bet.yesShares);
-//             const noShares = Number(bet.noShares);
-//             const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
-//             if (!claimed && yesShares <= 0 && noShares <= 0) return null;
-//             const realInvested = Number(
-//               bet.totalInvested || bet.total_invested || 0,
-//             );
-//             const costBasis =
-//               realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
-//             let currentRealValue = 0;
-//             if (claimed || market.status === 3) {
-//               const isYesWinner = market.outcome === true;
-//               const winningShares = isYesWinner ? yesShares : noShares;
-//               const totalWinningReal = isYesWinner
-//                 ? Number(market.yesShares || 0)
-//                 : Number(market.noShares || 0);
-//               const totalRealVolume = Number(market.totalVolume || 0);
-//               if (totalWinningReal > 0 && winningShares > 0) {
-//                 currentRealValue =
-//                   (winningShares / totalWinningReal) * totalRealVolume * 0.98;
-//               }
-//             } else {
-//               currentRealValue =
-//                 yesShares * Number(market.yesPrice || 0) +
-//                 noShares * Number(market.noPrice || 0);
-//             }
-//             return {
-//               prediction: mapMarketToPrediction(market),
-//               marketId: market.marketId.toString(),
-//               yesShares,
-//               noShares,
-//               invested: costBasis,
-//               currentValue: currentRealValue,
-//               profitLoss: currentRealValue - costBasis,
-//               status: market.status || 1,
-//               outcome: market.outcome,
-//               hasClaimed: claimed,
-//             };
-//           })
-//           .filter(Boolean);
-//         setPositions(activePositions);
-//       } catch (e) {
-//         console.error("Error fetching portfolio", e);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-//     fetchPortfolio();
-//   }, [address]);
-
-//   useEffect(() => {
-//     if (!address || !isConnected) return;
-//     const fetchBalance = async () => {
-//       setBalanceLoading(true);
-//       try {
-//         const usdcAddress =
-//           import.meta.env.VITE_USDC_ADDRESS ||
-//           "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
-//         const provider = new RpcProvider({
-//           nodeUrl:
-//             import.meta.env.VITE_NODE_URL ||
-//             "https://starknet-mainnet.g.alchemy.com/v2/EzO62qQ-wC9-OQyeOyL1y",
-//         });
-//         const res = await provider.callContract({
-//           contractAddress: usdcAddress,
-//           entrypoint: "balanceOf",
-//           calldata: CallData.compile([address]),
-//         });
-//         const balanceBN = uint256.uint256ToBN({ low: res[0], high: res[1] });
-//         setUsdcBalance((Number(balanceBN.toString()) / 1_000_000).toFixed(2));
-//       } catch {
-//         setUsdcBalance("0.00");
-//       } finally {
-//         setBalanceLoading(false);
-//       }
-//     };
-//     fetchBalance();
-//     const iv = setInterval(fetchBalance, 10000);
-//     return () => clearInterval(iv);
-//   }, [address, isConnected]);
-
-//   const handleClaim = async (marketId: string, e: React.MouseEvent) => {
-//     e.stopPropagation();
-//     if (!isConnected) return;
-//     setClaimingId(marketId);
-//     try {
-//       await execute([
-//         {
-//           contractAddress: import.meta.env.VITE_HUB_ADDRESS,
-//           entrypoint: "claim_winnings",
-//           calldata: CallData.compile([marketId]),
-//         },
-//       ]);
-//       toast.success("Winnings claimed!");
-//       setPositions((prev) =>
-//         prev.map((p) =>
-//           p.marketId === marketId ? { ...p, hasClaimed: true } : p,
-//         ),
-//       );
-//     } catch (err: any) {
-//       toast.error("Claim failed", { description: err.message });
-//     } finally {
-//       setClaimingId(null);
-//     }
-//   };
-
-//   const getPositionStatus = (pos: UserPosition) => {
-//     if (pos.status === 1)
-//       return { type: "active", label: "Active", canClaim: false };
-//     const userWon =
-//       (pos.outcome === true && pos.yesShares > 0) ||
-//       (pos.outcome === false && pos.noShares > 0);
-//     if (userWon)
-//       return pos.hasClaimed
-//         ? { type: "claimed", label: "Claimed", canClaim: false }
-//         : { type: "won", label: "Won", canClaim: true };
-//     return { type: "lost", label: "Lost", canClaim: false };
-//   };
-
-//   const totalInvested = positions.reduce((s, p) => s + p.invested, 0);
-//   const totalValue = positions.reduce((s, p) => s + p.currentValue, 0);
-//   const totalPL = positions.reduce((s, p) => s + p.profitLoss, 0);
-//   const plPercent =
-//     totalInvested > 0 ? ((totalPL / totalInvested) * 100).toFixed(2) : "0.00";
-//   const activePositions = positions.filter((p) => p.status === 1);
-//   const resolvedPositions = positions.filter((p) => p.status === 3);
-//   const wonPositions = resolvedPositions.filter((p) => {
-//     const s = getPositionStatus(p);
-//     return s.type === "won" || s.type === "claimed";
-//   });
-
-//   const STATUS_STYLES: Record<
-//     string,
-//     { color: string; bg: string; border: string }
-//   > = {
-//     active: {
-//       color: "#1F87FC",
-//       bg: "rgba(31,135,252,0.08)",
-//       border: "rgba(31,135,252,0.25)",
-//     },
-//     won: {
-//       color: "#00ff88",
-//       bg: "rgba(0,255,136,0.08)",
-//       border: "rgba(0,255,136,0.25)",
-//     },
-//     claimed: {
-//       color: "#00ff88",
-//       bg: "rgba(0,255,136,0.05)",
-//       border: "rgba(0,255,136,0.15)",
-//     },
-//     lost: {
-//       color: "#ff3366",
-//       bg: "rgba(255,51,102,0.05)",
-//       border: "rgba(255,51,102,0.15)",
-//     },
-//   };
-
-//   // ── Not connected ──
-//   if (!address) {
-//     return (
-//       <div
-//         style={{
-//           width: "100%",
-//           maxWidth: 560,
-//           margin: "0 auto",
-//           padding: "40px 20px",
-//           fontFamily: "inherit",
-//         }}
-//       >
-//         <div
-//           style={{
-//             background: "#12121f",
-//             border: "1px solid rgba(31,135,252,0.18)",
-//             borderRadius: 18,
-//             padding: "60px 32px",
-//             textAlign: "center",
-//             display: "flex",
-//             flexDirection: "column",
-//             alignItems: "center",
-//             gap: 0,
-//           }}
-//         >
-//           <div
-//             style={{
-//               width: 56,
-//               height: 56,
-//               borderRadius: "50%",
-//               background: "rgba(31,135,252,0.08)",
-//               border: "1px solid rgba(31,135,252,0.2)",
-//               display: "flex",
-//               alignItems: "center",
-//               justifyContent: "center",
-//               marginBottom: 18,
-//             }}
-//           >
-//             <Wallet style={{ width: 24, height: 24, color: "#1F87FC" }} />
-//           </div>
-//           <h2
-//             style={{
-//               fontSize: 20,
-//               fontWeight: 600,
-//               color: "#e2e8f0",
-//               margin: "0 0 8px",
-//             }}
-//           >
-//             Connect your wallet
-//           </h2>
-//           <p
-//             style={{
-//               fontSize: 13,
-//               color: "#4a5568",
-//               margin: "0 0 28px",
-//               maxWidth: 300,
-//               lineHeight: 1.6,
-//             }}
-//           >
-//             Track your predictions, view performance, and claim your winnings.
-//           </p>
-//           <button
-//             onClick={() => connect("web3")}
-//             style={{
-//               display: "inline-flex",
-//               alignItems: "center",
-//               gap: 8,
-//               padding: "11px 24px",
-//               background: "#1F87FC",
-//               color: "#fff",
-//               border: "none",
-//               borderRadius: 10,
-//               fontSize: 13,
-//               fontWeight: 600,
-//               cursor: "pointer",
-//               fontFamily: "inherit",
-//               boxShadow: "0 0 16px rgba(31,135,252,0.25)",
-//               transition: "opacity 0.15s",
-//             }}
-//             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
-//             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-//           >
-//             <Wallet style={{ width: 14, height: 14 }} /> Connect wallet
-//           </button>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   return (
-//     <div
-//       style={{
-//         width: "100%",
-//         maxWidth: 900,
-//         margin: "0 auto",
-//         padding: "28px 20px 80px",
-//         fontFamily: "inherit",
-//         display: "flex",
-//         flexDirection: "column",
-//         gap: 20,
-//       }}
-//     >
-//       {/* ── Header ── */}
-//       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-//         <div
-//           style={{
-//             width: 36,
-//             height: 36,
-//             borderRadius: 10,
-//             background: "rgba(31,135,252,0.08)",
-//             border: "1px solid rgba(31,135,252,0.2)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             flexShrink: 0,
-//           }}
-//         >
-//           <PieChart style={{ width: 16, height: 16, color: "#1F87FC" }} />
-//         </div>
-//         <div>
-//           <h1
-//             style={{
-//               fontSize: 18,
-//               fontWeight: 600,
-//               color: "#e2e8f0",
-//               margin: 0,
-//               lineHeight: 1.2,
-//               display: "flex",
-//               alignItems: "center",
-//               gap: 8,
-//             }}
-//           >
-//             Portfolio
-//             {(loading || balanceLoading) && (
-//               <Loader2
-//                 style={{
-//                   width: 14,
-//                   height: 14,
-//                   color: "#1F87FC",
-//                   animation: "spin 0.8s linear infinite",
-//                 }}
-//               />
-//             )}
-//           </h1>
-//           <p
-//             style={{ fontSize: 12, color: "#4a5568", margin: 0, marginTop: 2 }}
-//           >
-//             Track your prediction investments and performance
-//           </p>
-//         </div>
-//         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-//       </div>
-
-//       {/* ── Stats grid ── */}
-//       <div
-//         style={{
-//           display: "grid",
-//           gridTemplateColumns: "repeat(4, 1fr)",
-//           gap: 10,
-//         }}
-//       >
-//         {[
-//           {
-//             icon: <CreditCard style={{ width: 13, height: 13 }} />,
-//             label: "Balance",
-//             value: `$${usdcBalance}`,
-//             sub: "USDC",
-//             color: "#1F87FC",
-//           },
-//           {
-//             icon: <DollarSign style={{ width: 13, height: 13 }} />,
-//             label: "Invested",
-//             value: fmtUSD(totalInvested),
-//             sub: `${positions.length} position${positions.length !== 1 ? "s" : ""}`,
-//             color: "#1F87FC",
-//           },
-//           {
-//             icon: <PieChart style={{ width: 13, height: 13 }} />,
-//             label: "Current value",
-//             value: fmtUSD(totalValue),
-//             sub: `${activePositions.length} active`,
-//             color: "#1F87FC",
-//           },
-//           {
-//             icon: <Trophy style={{ width: 13, height: 13 }} />,
-//             label: "Win rate",
-//             value: `${resolvedPositions.length > 0 ? ((wonPositions.length / resolvedPositions.length) * 100).toFixed(0) : 0}%`,
-//             sub: `${wonPositions.length}/${resolvedPositions.length} won`,
-//             color: "#00ff88",
-//           },
-//         ].map((stat) => (
-//           <div
-//             key={stat.label}
-//             style={{
-//               background: "rgba(255,255,255,0.03)",
-//               border: `1px solid ${stat.color}18`,
-//               borderRadius: 12,
-//               padding: "14px 14px 12px",
-//             }}
-//           >
-//             <div
-//               style={{
-//                 display: "flex",
-//                 alignItems: "center",
-//                 gap: 5,
-//                 color: stat.color,
-//                 opacity: 0.7,
-//                 marginBottom: 8,
-//               }}
-//             >
-//               {stat.icon}
-//               <span
-//                 style={{
-//                   fontSize: 10,
-//                   fontWeight: 500,
-//                   letterSpacing: "0.03em",
-//                 }}
-//               >
-//                 {stat.label}
-//               </span>
-//             </div>
-//             <div
-//               style={{
-//                 fontSize: 20,
-//                 fontWeight: 700,
-//                 color: "#e2e8f0",
-//                 fontVariantNumeric: "tabular-nums",
-//                 letterSpacing: "-0.02em",
-//                 marginBottom: 3,
-//               }}
-//             >
-//               {stat.value}
-//             </div>
-//             <div style={{ fontSize: 10, color: "#3a4a5e" }}>{stat.sub}</div>
-//           </div>
-//         ))}
-//       </div>
-
-//       {/* ── P&L banner ── */}
-//       {totalInvested > 0 && (
-//         <div
-//           style={{
-//             background:
-//               totalPL >= 0 ? "rgba(0,255,136,0.05)" : "rgba(255,51,102,0.05)",
-//             border: `1px solid ${totalPL >= 0 ? "rgba(0,255,136,0.2)" : "rgba(255,51,102,0.2)"}`,
-//             borderRadius: 14,
-//             padding: "16px 18px",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "space-between",
-//           }}
-//         >
-//           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-//             <div
-//               style={{
-//                 width: 36,
-//                 height: 36,
-//                 borderRadius: 10,
-//                 background:
-//                   totalPL >= 0 ? "rgba(0,255,136,0.1)" : "rgba(255,51,102,0.1)",
-//                 display: "flex",
-//                 alignItems: "center",
-//                 justifyContent: "center",
-//               }}
-//             >
-//               {totalPL >= 0 ? (
-//                 <ArrowUpRight
-//                   style={{ width: 18, height: 18, color: "#00ff88" }}
-//                 />
-//               ) : (
-//                 <ArrowDownRight
-//                   style={{ width: 18, height: 18, color: "#ff3366" }}
-//                 />
-//               )}
-//             </div>
-//             <div>
-//               <div style={{ fontSize: 11, color: "#4a5568", marginBottom: 3 }}>
-//                 Total profit / loss
-//               </div>
-//               <div
-//                 style={{
-//                   fontSize: 22,
-//                   fontWeight: 700,
-//                   color: totalPL >= 0 ? "#00ff88" : "#ff3366",
-//                   fontVariantNumeric: "tabular-nums",
-//                   letterSpacing: "-0.02em",
-//                 }}
-//               >
-//                 {totalPL >= 0 ? "+" : ""}
-//                 {fmtUSD(totalPL)}
-//               </div>
-//             </div>
-//           </div>
-//           <div style={{ textAlign: "right" }}>
-//             <div style={{ fontSize: 11, color: "#4a5568", marginBottom: 3 }}>
-//               Return
-//             </div>
-//             <div
-//               style={{
-//                 fontSize: 22,
-//                 fontWeight: 700,
-//                 color: totalPL >= 0 ? "#00ff88" : "#ff3366",
-//                 fontVariantNumeric: "tabular-nums",
-//               }}
-//             >
-//               {totalPL >= 0 ? "+" : ""}
-//               {plPercent}%
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── Positions ── */}
-//       <div>
-//         <div
-//           style={{
-//             fontSize: 12,
-//             fontWeight: 500,
-//             color: "#64748b",
-//             letterSpacing: "0.04em",
-//             marginBottom: 12,
-//             display: "flex",
-//             alignItems: "center",
-//             gap: 6,
-//           }}
-//         >
-//           <Clock style={{ width: 12, height: 12 }} />
-//           Your positions · {positions.length} total
-//         </div>
-
-//         {!loading && positions.length === 0 ? (
-//           <div
-//             style={{
-//               background: "#12121f",
-//               border: "1px solid rgba(31,135,252,0.1)",
-//               borderRadius: 16,
-//               padding: "60px 24px",
-//               textAlign: "center",
-//               display: "flex",
-//               flexDirection: "column",
-//               alignItems: "center",
-//               gap: 10,
-//             }}
-//           >
-//             <PieChart style={{ width: 32, height: 32, color: "#3a4a5e" }} />
-//             <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
-//               No active positions
-//             </p>
-//             <p style={{ fontSize: 12, color: "#3a4a5e", margin: 0 }}>
-//               Start trading predictions to build your portfolio
-//             </p>
-//           </div>
-//         ) : (
-//           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-//             {positions.map((position) => {
-//               const status = getPositionStatus(position);
-//               const ss = STATUS_STYLES[status.type] || STATUS_STYLES.active;
-//               const profitPercent =
-//                 position.invested > 0
-//                   ? ((position.profitLoss / position.invested) * 100).toFixed(1)
-//                   : "0.0";
-
-//               return (
-//                 <div
-//                   key={position.marketId}
-//                   style={{
-//                     background: "#12121f",
-//                     border: `1px solid ${ss.border}`,
-//                     borderRadius: 16,
-//                     padding: "16px 18px",
-//                     transition: "border-color 0.2s",
-//                     boxShadow:
-//                       status.type === "won" && !position.hasClaimed
-//                         ? "0 0 20px rgba(0,255,136,0.08)"
-//                         : "none",
-//                   }}
-//                 >
-//                   {/* Top row: media + question + status */}
-//                   <div
-//                     style={{
-//                       display: "flex",
-//                       alignItems: "flex-start",
-//                       gap: 12,
-//                       marginBottom: 14,
-//                     }}
-//                   >
-//                     <div
-//                       style={{
-//                         width: 72,
-//                         height: 54,
-//                         flexShrink: 0,
-//                         borderRadius: 8,
-//                         overflow: "hidden",
-//                         border: "1px solid rgba(255,255,255,0.05)",
-//                         background: "#0d0d18",
-//                       }}
-//                     >
-//                       <MediaPreview
-//                         src={position.prediction.media.url}
-//                         type={
-//                           position.prediction.media.type === "video"
-//                             ? "video"
-//                             : undefined
-//                         }
-//                         alt="market"
-//                         style={{
-//                           width: "100%",
-//                           height: "100%",
-//                           objectFit: "cover",
-//                           display: "block",
-//                         }}
-//                       />
-//                     </div>
-
-//                     <div
-//                       style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-//                       onClick={() => onViewMarket(position.marketId)}
-//                     >
-//                       <p
-//                         style={{
-//                           fontSize: 13,
-//                           fontWeight: 500,
-//                           color: "#e2e8f0",
-//                           margin: "0 0 7px",
-//                           lineHeight: 1.4,
-//                           display: "-webkit-box",
-//                           WebkitLineClamp: 2,
-//                           WebkitBoxOrient: "vertical",
-//                           overflow: "hidden",
-//                         }}
-//                       >
-//                         {position.prediction.question}
-//                       </p>
-//                       <div
-//                         style={{
-//                           display: "flex",
-//                           alignItems: "center",
-//                           gap: 6,
-//                           flexWrap: "wrap",
-//                         }}
-//                       >
-//                         <span
-//                           style={{
-//                             fontSize: 10,
-//                             color: "#4a5568",
-//                             background: "rgba(255,255,255,0.04)",
-//                             borderRadius: 5,
-//                             padding: "2px 7px",
-//                           }}
-//                         >
-//                           {position.prediction.creator.name}
-//                         </span>
-//                         <span
-//                           style={{
-//                             fontSize: 9,
-//                             fontWeight: 700,
-//                             letterSpacing: "0.06em",
-//                             textTransform: "uppercase",
-//                             color: ss.color,
-//                             background: ss.bg,
-//                             border: `1px solid ${ss.border}`,
-//                             borderRadius: 5,
-//                             padding: "2px 7px",
-//                             display: "flex",
-//                             alignItems: "center",
-//                             gap: 3,
-//                           }}
-//                         >
-//                           {status.type === "active" && (
-//                             <span
-//                               style={{
-//                                 width: 5,
-//                                 height: 5,
-//                                 borderRadius: "50%",
-//                                 background: "#1F87FC",
-//                                 display: "inline-block",
-//                               }}
-//                             />
-//                           )}
-//                           {status.type === "won" && (
-//                             <Trophy style={{ width: 9, height: 9 }} />
-//                           )}
-//                           {status.type === "claimed" && (
-//                             <CheckCircle style={{ width: 9, height: 9 }} />
-//                           )}
-//                           {status.label}
-//                         </span>
-//                       </div>
-//                     </div>
-//                   </div>
-
-//                   {/* Shares row */}
-//                   {(position.yesShares > 0 || position.noShares > 0) && (
-//                     <div
-//                       style={{
-//                         display: "grid",
-//                         gridTemplateColumns:
-//                           position.yesShares > 0 && position.noShares > 0
-//                             ? "1fr 1fr"
-//                             : "1fr",
-//                         gap: 8,
-//                         marginBottom: 14,
-//                       }}
-//                     >
-//                       {position.yesShares > 0 && (
-//                         <div
-//                           style={{
-//                             background: "rgba(0,255,136,0.04)",
-//                             border: "1px solid rgba(0,255,136,0.18)",
-//                             borderRadius: 10,
-//                             padding: "10px 12px",
-//                           }}
-//                         >
-//                           <div
-//                             style={{
-//                               fontSize: 10,
-//                               color: "rgba(0,255,136,0.6)",
-//                               fontWeight: 600,
-//                               letterSpacing: "0.05em",
-//                               marginBottom: 4,
-//                             }}
-//                           >
-//                             YES
-//                           </div>
-//                           <div
-//                             style={{
-//                               fontSize: 16,
-//                               fontWeight: 700,
-//                               color: "#00ff88",
-//                               fontVariantNumeric: "tabular-nums",
-//                             }}
-//                           >
-//                             {position.yesShares.toFixed(4)}
-//                           </div>
-//                         </div>
-//                       )}
-//                       {position.noShares > 0 && (
-//                         <div
-//                           style={{
-//                             background: "rgba(255,51,102,0.04)",
-//                             border: "1px solid rgba(255,51,102,0.18)",
-//                             borderRadius: 10,
-//                             padding: "10px 12px",
-//                           }}
-//                         >
-//                           <div
-//                             style={{
-//                               fontSize: 10,
-//                               color: "rgba(255,51,102,0.6)",
-//                               fontWeight: 600,
-//                               letterSpacing: "0.05em",
-//                               marginBottom: 4,
-//                             }}
-//                           >
-//                             NO
-//                           </div>
-//                           <div
-//                             style={{
-//                               fontSize: 16,
-//                               fontWeight: 700,
-//                               color: "#ff3366",
-//                               fontVariantNumeric: "tabular-nums",
-//                             }}
-//                           >
-//                             {position.noShares.toFixed(4)}
-//                           </div>
-//                         </div>
-//                       )}
-//                     </div>
-//                   )}
-
-//                   {/* Footer: invested / value / P&L / claim */}
-//                   <div
-//                     style={{
-//                       display: "flex",
-//                       alignItems: "center",
-//                       justifyContent: "space-between",
-//                       paddingTop: 12,
-//                       borderTop: "1px solid rgba(255,255,255,0.04)",
-//                     }}
-//                   >
-//                     <div
-//                       style={{ display: "flex", alignItems: "center", gap: 20 }}
-//                     >
-//                       <div>
-//                         <div
-//                           style={{
-//                             fontSize: 10,
-//                             color: "#3a4a5e",
-//                             marginBottom: 3,
-//                           }}
-//                         >
-//                           Invested
-//                         </div>
-//                         <div
-//                           style={{
-//                             fontSize: 13,
-//                             fontWeight: 600,
-//                             color: "#e2e8f0",
-//                             fontVariantNumeric: "tabular-nums",
-//                           }}
-//                         >
-//                           {fmtUSD(position.invested)}
-//                         </div>
-//                       </div>
-//                       {!status.canClaim && (
-//                         <>
-//                           <div>
-//                             <div
-//                               style={{
-//                                 fontSize: 10,
-//                                 color: "#3a4a5e",
-//                                 marginBottom: 3,
-//                               }}
-//                             >
-//                               Value
-//                             </div>
-//                             <div
-//                               style={{
-//                                 fontSize: 13,
-//                                 fontWeight: 600,
-//                                 color: "#e2e8f0",
-//                                 fontVariantNumeric: "tabular-nums",
-//                               }}
-//                             >
-//                               {fmtUSD(position.currentValue)}
-//                             </div>
-//                           </div>
-//                           <div>
-//                             <div
-//                               style={{
-//                                 fontSize: 10,
-//                                 color: "#3a4a5e",
-//                                 marginBottom: 3,
-//                               }}
-//                             >
-//                               P&amp;L
-//                             </div>
-//                             <div
-//                               style={{
-//                                 fontSize: 13,
-//                                 fontWeight: 600,
-//                                 color:
-//                                   position.profitLoss >= 0
-//                                     ? "#00ff88"
-//                                     : "#ff3366",
-//                                 fontVariantNumeric: "tabular-nums",
-//                                 display: "flex",
-//                                 alignItems: "center",
-//                                 gap: 3,
-//                               }}
-//                             >
-//                               {position.profitLoss >= 0 ? (
-//                                 <ArrowUpRight
-//                                   style={{ width: 12, height: 12 }}
-//                                 />
-//                               ) : (
-//                                 <ArrowDownRight
-//                                   style={{ width: 12, height: 12 }}
-//                                 />
-//                               )}
-//                               {position.profitLoss >= 0 ? "+" : ""}
-//                               {fmtUSD(Math.abs(position.profitLoss))}
-//                               <span style={{ fontSize: 10, opacity: 0.7 }}>
-//                                 ({profitPercent}%)
-//                               </span>
-//                             </div>
-//                           </div>
-//                         </>
-//                       )}
-//                     </div>
-
-//                     {status.canClaim && (
-//                       <button
-//                         onClick={(e) => handleClaim(position.marketId, e)}
-//                         disabled={claimingId === position.marketId}
-//                         style={{
-//                           display: "flex",
-//                           alignItems: "center",
-//                           gap: 6,
-//                           padding: "9px 16px",
-//                           background: "#00ff88",
-//                           color: "#000",
-//                           border: "none",
-//                           borderRadius: 9,
-//                           fontSize: 12,
-//                           fontWeight: 700,
-//                           fontFamily: "inherit",
-//                           cursor:
-//                             claimingId === position.marketId
-//                               ? "not-allowed"
-//                               : "pointer",
-//                           opacity: claimingId === position.marketId ? 0.6 : 1,
-//                           boxShadow: "0 0 16px rgba(0,255,136,0.3)",
-//                           transition: "opacity 0.15s",
-//                         }}
-//                         onMouseEnter={(e) => {
-//                           if (claimingId !== position.marketId)
-//                             e.currentTarget.style.opacity = "0.85";
-//                         }}
-//                         onMouseLeave={(e) => {
-//                           e.currentTarget.style.opacity =
-//                             claimingId === position.marketId ? "0.6" : "1";
-//                         }}
-//                       >
-//                         {claimingId === position.marketId ? (
-//                           <>
-//                             <Loader2
-//                               style={{
-//                                 width: 12,
-//                                 height: 12,
-//                                 animation: "spin 0.8s linear infinite",
-//                               }}
-//                             />{" "}
-//                             Claiming…
-//                           </>
-//                         ) : (
-//                           <>
-//                             <Trophy style={{ width: 12, height: 12 }} /> Claim{" "}
-//                             {fmtUSD(position.currentValue)}
-//                           </>
-//                         )}
-//                       </button>
-//                     )}
-//                   </div>
-//                 </div>
-//               );
-//             })}
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
 import { useState, useEffect } from "react";
 import {
   TrendingUp,
@@ -1038,62 +77,138 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
   const [usdcBalance, setUsdcBalance] = useState("0.00");
   const [balanceLoading, setBalanceLoading] = useState(false);
 
+  // useEffect(() => {
+  //   if (!address) return;
+  //   const fetchPortfolio = async () => {
+  //     setLoading(true);
+  //     try {
+  //       const [marketsRes, posRes] = await Promise.all([
+  //         fetch(`${API_URL}/markets`),
+  //         fetch(`${API_URL}/positions/${address}`),
+  //       ]);
+  //       const marketsData: ApiMarket[] = await marketsRes.json();
+  //       const myBets = await posRes.json();
+
+  //       const activePositions: UserPosition[] = myBets
+  //         .map((bet: any) => {
+  //           const market = marketsData.find((m) => m.marketId === bet.marketId);
+  //           if (!market) return null;
+  //           const yesShares = Number(bet.yesShares);
+  //           const noShares = Number(bet.noShares);
+  //           const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
+  //           if (!claimed && yesShares <= 0 && noShares <= 0) return null;
+  //           const realInvested = Number(
+  //             bet.totalInvested || bet.total_invested || 0,
+  //           );
+  //           const costBasis =
+  //             realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
+  //           let currentRealValue = 0;
+  //           if (claimed || market.status === 3) {
+  //             const isYesWinner = market.outcome === true;
+  //             const winningShares = isYesWinner ? yesShares : noShares;
+  //             const totalWinningReal = isYesWinner
+  //               ? Number(market.yesShares || 0)
+  //               : Number(market.noShares || 0);
+  //             const totalRealVolume = Number(market.totalVolume || 0);
+  //             if (totalWinningReal > 0 && winningShares > 0) {
+  //               currentRealValue =
+  //                 (winningShares / totalWinningReal) * totalRealVolume * 0.98;
+  //             }
+  //           } else {
+  //             currentRealValue =
+  //               yesShares * Number(market.yesPrice || 0) +
+  //               noShares * Number(market.noPrice || 0);
+  //           }
+  //           return {
+  //             prediction: mapMarketToPrediction(market),
+  //             marketId: market.marketId.toString(),
+  //             yesShares,
+  //             noShares,
+  //             invested: costBasis,
+  //             currentValue: currentRealValue,
+  //             profitLoss: currentRealValue - costBasis,
+  //             status: market.status || 1,
+  //             outcome: market.outcome,
+  //             hasClaimed: claimed,
+  //           };
+  //         })
+  //         .filter(Boolean);
+  //       setPositions(activePositions);
+  //     } catch (e) {
+  //       console.error("Error fetching portfolio", e);
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
+  //   fetchPortfolio();
+  // }, [address]);
+
   useEffect(() => {
     if (!address) return;
+
     const fetchPortfolio = async () => {
       setLoading(true);
       try {
-        const [marketsRes, posRes] = await Promise.all([
-          fetch(`${API_URL}/markets`),
-          fetch(`${API_URL}/positions/${address}`),
-        ]);
-        const marketsData: ApiMarket[] = await marketsRes.json();
+        // 🟢 1. We ONLY fetch the positions now, because the backend leftJoin gives us the market data too!
+        const posRes = await fetch(`${API_URL}/positions/${address}`);
+        if (!posRes.ok) throw new Error("Failed to fetch positions");
+
         const myBets = await posRes.json();
 
         const activePositions: UserPosition[] = myBets
           .map((bet: any) => {
-            const market = marketsData.find((m) => m.marketId === bet.marketId);
-            if (!market) return null;
-            const yesShares = Number(bet.yesShares);
-            const noShares = Number(bet.noShares);
+            // 🟢 2. The 'bet' object now contains BOTH market info (status, yesPrice) AND position info (yesShares)
+
+            const yesShares = Number(bet.yesShares || 0);
+            const noShares = Number(bet.noShares || 0);
             const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
+
             if (!claimed && yesShares <= 0 && noShares <= 0) return null;
+
             const realInvested = Number(
               bet.totalInvested || bet.total_invested || 0,
             );
             const costBasis =
               realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
+
             let currentRealValue = 0;
-            if (claimed || market.status === 3) {
-              const isYesWinner = market.outcome === true;
+
+            // 🟢 3. Math logic remains the same, just referencing 'bet' directly
+            if (claimed || bet.status === 3) {
+              const isYesWinner = bet.outcome === true;
               const winningShares = isYesWinner ? yesShares : noShares;
+
               const totalWinningReal = isYesWinner
-                ? Number(market.yesShares || 0)
-                : Number(market.noShares || 0);
-              const totalRealVolume = Number(market.totalVolume || 0);
+                ? Number(bet.yesShares || 0) // Note: This is the MARKET's total yesShares, assuming backend mapped it
+                : Number(bet.noShares || 0);
+
+              const totalRealVolume = Number(bet.totalVolume || 0);
+
               if (totalWinningReal > 0 && winningShares > 0) {
                 currentRealValue =
                   (winningShares / totalWinningReal) * totalRealVolume * 0.98;
               }
             } else {
               currentRealValue =
-                yesShares * Number(market.yesPrice || 0) +
-                noShares * Number(market.noPrice || 0);
+                yesShares * Number(bet.yesPrice || 0) +
+                noShares * Number(bet.noPrice || 0);
             }
+
             return {
-              prediction: mapMarketToPrediction(market),
-              marketId: market.marketId.toString(),
+              prediction: mapMarketToPrediction(bet), // Safely parses live_chart JSON thanks to our previous fix!
+              marketId: bet.marketId.toString(),
               yesShares,
               noShares,
               invested: costBasis,
               currentValue: currentRealValue,
               profitLoss: currentRealValue - costBasis,
-              status: market.status || 1,
-              outcome: market.outcome,
+              status: bet.status || 1,
+              outcome: bet.outcome,
               hasClaimed: claimed,
             };
           })
           .filter(Boolean);
+
         setPositions(activePositions);
       } catch (e) {
         console.error("Error fetching portfolio", e);
@@ -1101,9 +216,9 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
         setLoading(false);
       }
     };
+
     fetchPortfolio();
   }, [address]);
-
   useEffect(() => {
     if (!address || !isConnected) return;
     const fetchBalance = async () => {
