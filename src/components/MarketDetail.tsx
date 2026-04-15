@@ -1373,12 +1373,19 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
 
   const getTimeRemaining = () => {
     if (!prediction) return "";
+
     const diff = new Date(prediction.endsAt).getTime() - Date.now();
     if (diff <= 0) return "Ended";
+
     const days = Math.floor(diff / 86400000);
     const hours = Math.floor((diff % 86400000) / 3600000);
-    if (days > 0) return `${days}d ${hours}h left`;
-    return `${hours}h left`;
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+
+    if (days > 0) return `${days}d ${hours}h ${minutes}m ${seconds}s left`;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s left`;
+    if (minutes > 0) return `${minutes}m ${seconds}s left`;
+    return `${seconds}s left`;
   };
 
   // ── Loading ──
