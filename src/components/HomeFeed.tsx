@@ -692,7 +692,7 @@ export function HomeFeed({ onViewMarket }: HomeFeedProps) {
               letterSpacing: "0.06em",
             }}
           >
-            LIVE
+            GO LIVE
           </span>
         </button>
       </div>

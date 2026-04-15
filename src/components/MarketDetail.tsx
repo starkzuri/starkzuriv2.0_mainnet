@@ -1,4 +1,4 @@
-// import { useState, useEffect } from "react";
+// import { useState, useEffect, useMemo } from "react";
 // import {
 //   ArrowLeft,
 //   Heart,
@@ -125,11 +125,30 @@
 //         if (rawMarket) {
 //           setApiData(rawMarket);
 //           const mediaStr = rawMarket.media || "";
+
+//           // --- SAFELY PARSE JSON FOR LIVE MARKETS ---
+//           let parsedConfig: any = null;
+//           let isLiveChart = false;
+//           try {
+//             parsedConfig = JSON.parse(mediaStr);
+//             if (parsedConfig.type === "live_chart") isLiveChart = true;
+//           } catch (e) {
+//             // It's a standard URL/IPFS string
+//           }
+
 //           const isVideo =
 //             mediaStr.endsWith(".mp4") || mediaStr.endsWith(".webm");
-//           const mediaUrl = mediaStr.includes("ipfs")
-//             ? mediaStr.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/")
-//             : "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=1000&q=80";
+
+//           // Preserve JSON string if it's a live chart, otherwise process URL
+//           const mediaUrl = isLiveChart
+//             ? mediaStr
+//             : mediaStr.includes("ipfs")
+//               ? mediaStr.replace(
+//                   "ipfs://",
+//                   "https://gateway.pinata.cloud/ipfs/",
+//                 )
+//               : mediaStr ||
+//                 "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=1000&q=80";
 
 //           const formatted: Prediction = {
 //             id: rawMarket.marketId.toString(),
@@ -142,7 +161,7 @@
 //             question: rawMarket.question,
 //             category: rawMarket.category || "General",
 //             media: {
-//               type: isVideo ? "video" : "image",
+//               type: isLiveChart ? "live_chart" : isVideo ? "video" : "image",
 //               url: mediaUrl,
 //               thumbnail: isVideo
 //                 ? "https://placehold.co/600x400/000000/FFF?text=Video"
@@ -233,12 +252,19 @@
 
 //   const getTimeRemaining = () => {
 //     if (!prediction) return "";
+
 //     const diff = new Date(prediction.endsAt).getTime() - Date.now();
 //     if (diff <= 0) return "Ended";
+
 //     const days = Math.floor(diff / 86400000);
 //     const hours = Math.floor((diff % 86400000) / 3600000);
-//     if (days > 0) return `${days}d ${hours}h left`;
-//     return `${hours}h left`;
+//     const minutes = Math.floor((diff % 3600000) / 60000);
+//     const seconds = Math.floor((diff % 60000) / 1000);
+
+//     if (days > 0) return `${days}d ${hours}h ${minutes}m ${seconds}s left`;
+//     if (hours > 0) return `${hours}h ${minutes}m ${seconds}s left`;
+//     if (minutes > 0) return `${minutes}m ${seconds}s left`;
+//     return `${seconds}s left`;
 //   };
 
 //   // ── Loading ──
@@ -294,6 +320,12 @@
 //   const noPercent = Math.round(prediction.noPrice * 100);
 //   const totalShares =
 //     Number(prediction.yesShares) + Number(prediction.noShares);
+
+//   // Extract JSON configuration if it exists
+//   const mediaConfig =
+//     prediction.media.type === "live_chart"
+//       ? JSON.parse(prediction.media.url)
+//       : null;
 
 //   return (
 //     <div
@@ -410,44 +442,41 @@
 //           </div>
 //         </div>
 
-//         {/* Media */}
-//         {/* <div
-//           style={{
-//             position: "relative",
-//             width: "100%",
-//             maxHeight: 340,
-//             overflow: "hidden",
-//             background: "#0d0d18",
-//           }}
-//         >
-//           <MediaPreview
-//             src={prediction.media.url}
-//             type={prediction.media.type === "video" ? "video" : undefined}
-//             alt={prediction.question}
-//             style={{
-//               width: "100%",
-//               maxHeight: 340,
-//               objectFit: "cover",
-//               display: "block",
-//               borderRadius: 0,
-//               opacity: 0.85,
-//             }}
-//           />
-//           <LiveTradingChart />
+//         {/* ── Media or Chart Area ── */}
+//         {mediaConfig?.type === "live_chart" ? (
 //           <div
 //             style={{
-//               position: "absolute",
-//               inset: 0,
-//               background:
-//                 "linear-gradient(to bottom, transparent 50%, #12121f 100%)",
-//               pointerEvents: "none",
+//               position: "relative",
+//               width: "100%",
+//               height: 380,
+//               background: "#0a0b0f",
+//               borderBottom: "1px solid rgba(255,255,255,0.04)",
 //             }}
-//           />
-//         </div> */}
+//           >
+//             {mediaConfig.strike && (
+//               <div
+//                 style={{
+//                   position: "absolute",
+//                   top: 16,
+//                   right: 16,
+//                   zIndex: 10,
+//                   background: "rgba(31,135,252,0.15)",
+//                   border: "1px solid rgba(31,135,252,0.3)",
+//                   color: "#1F87FC",
+//                   padding: "4px 10px",
+//                   borderRadius: 8,
+//                   fontSize: 12,
+//                   fontWeight: 600,
+//                   backdropFilter: "blur(4px)",
+//                 }}
+//               >
+//                 Target: &gt; ${mediaConfig.strike}
+//               </div>
+//             )}
 
-//         {/* ── Media or Chart Area ── */}
-
-//         {apiData?.category == "live" ? (
+//             <LiveTradingChart symbol={mediaConfig.symbol} />
+//           </div>
+//         ) : (
 //           <div
 //             style={{
 //               position: "relative",
@@ -479,16 +508,6 @@
 //                 pointerEvents: "none",
 //               }}
 //             />
-//           </div>
-//         ) : (
-//           <div
-//             style={{
-//               width: "100%",
-//               height: 380,
-//               background: "#0a0b0f",
-//             }}
-//           >
-//             <LiveTradingChart symbol="strkusdt" />
 //           </div>
 //         )}
 
@@ -1233,6 +1252,10 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const [activeChart, setActiveChart] = useState<"yes" | "no" | "both">("both");
   const [comments, setComments] = useState<Comment[]>([]);
 
+  // 🟢 Optimistic Settlement State
+  const [expectedClose, setExpectedClose] = useState<number | null>(null);
+  const [isFetchingClose, setIsFetchingClose] = useState(false);
+
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
@@ -1358,6 +1381,68 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
     return () => clearInterval(interval);
   }, [marketId, address]);
 
+  // ── Bulletproof Parse Media Config ──
+  let mediaConfig: any = null;
+  const rawMedia = prediction?.media?.url || "";
+  const isLiveMarket = String(rawMedia).includes('"type":"live_chart"');
+  if (isLiveMarket) {
+    try {
+      mediaConfig =
+        typeof rawMedia === "string" ? JSON.parse(rawMedia) : rawMedia;
+    } catch (e) {
+      console.error("Failed to parse live config", e);
+    }
+  }
+
+  const marketComplete = prediction
+    ? new Date(prediction.endsAt).getTime() - Date.now() <= 0
+    : false;
+
+  // 🟢 OPTIMISTIC FETCH EFFECT
+  useEffect(() => {
+    if (
+      marketComplete &&
+      isLiveMarket &&
+      mediaConfig &&
+      !expectedClose &&
+      !isFetchingClose &&
+      apiData?.status !== 3
+    ) {
+      setIsFetchingClose(true);
+
+      const fetchClose = async () => {
+        try {
+          // Use exact database timestamp to match backend
+          const endTimeMs = new Date(prediction!.endsAt).getTime();
+          const symbolUpper = String(mediaConfig.symbol).toUpperCase();
+
+          const res = await fetch(
+            `https://api.binance.com/api/v3/klines?symbol=${symbolUpper}&interval=1m&endTime=${endTimeMs}&limit=1`,
+          );
+          const data = await res.json();
+
+          if (data && data[0] && data[0][4]) {
+            setExpectedClose(parseFloat(data[0][4]));
+          }
+        } catch (err) {
+          console.error("Frontend failed to fetch close price", err);
+        } finally {
+          setIsFetchingClose(false);
+        }
+      };
+
+      fetchClose();
+    }
+  }, [
+    marketComplete,
+    isLiveMarket,
+    mediaConfig,
+    prediction,
+    expectedClose,
+    isFetchingClose,
+    apiData,
+  ]);
+
   const handleTrade = async (isYes: boolean) => {
     if (!amount || parseFloat(amount) <= 0)
       return alert("Enter a valid amount");
@@ -1432,8 +1517,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   }
 
   const isMarketActive =
-    new Date(prediction.endsAt) > new Date() &&
-    (apiData?.status === 1 || !apiData?.status);
+    !marketComplete && (apiData?.status === 1 || !apiData?.status);
 
   const yesData = calculatePayout(amount, prediction.yesPrice);
   const noData = calculatePayout(amount, prediction.noPrice);
@@ -1441,12 +1525,6 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const noPercent = Math.round(prediction.noPrice * 100);
   const totalShares =
     Number(prediction.yesShares) + Number(prediction.noShares);
-
-  // Extract JSON configuration if it exists
-  const mediaConfig =
-    prediction.media.type === "live_chart"
-      ? JSON.parse(prediction.media.url)
-      : null;
 
   return (
     <div
@@ -1564,7 +1642,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
         </div>
 
         {/* ── Media or Chart Area ── */}
-        {mediaConfig?.type === "live_chart" ? (
+        {isLiveMarket && mediaConfig ? (
           <div
             style={{
               position: "relative",
@@ -1589,9 +1667,13 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
                   fontSize: 12,
                   fontWeight: 600,
                   backdropFilter: "blur(4px)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                Target: &gt; ${mediaConfig.strike}
+                Target: {mediaConfig.direction === "below" ? "📉 <" : "📈 >"} $
+                {mediaConfig.strike}
               </div>
             )}
 
@@ -2111,7 +2193,86 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
               />
             </div>
           ) : (
-            <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+                marginBottom: 24,
+              }}
+            >
+              {/* 🟢 NEW OPTIMISTIC SETTLEMENT UI FOR CRYPTO MARKETS */}
+              {isLiveMarket && mediaConfig && (
+                <div
+                  style={{
+                    padding: "16px",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 12,
+                    textAlign: "center",
+                  }}
+                >
+                  {apiData?.status === 3 ? (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#00ff88",
+                          marginBottom: 6,
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✅ Official On-Chain Settlement
+                      </div>
+                      <div
+                        style={{ fontSize: 24, fontWeight: 800, color: "#fff" }}
+                      >
+                        Market Resolved to{" "}
+                        <span
+                          style={{
+                            color: apiData.outcome ? "#00ff88" : "#ff3366",
+                          }}
+                        >
+                          {apiData.outcome ? "YES" : "NO"}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#cbd5e1",
+                          marginBottom: 6,
+                          fontWeight: 500,
+                        }}
+                      >
+                        🔒 Expected Settlement (Awaiting Oracle)
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 28,
+                          fontWeight: 800,
+                          color: expectedClose ? "#fff" : "#64748b",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {expectedClose
+                          ? `$${expectedClose.toFixed(2)}`
+                          : "Fetching..."}
+                      </div>
+                      <div
+                        style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}
+                      >
+                        Calculating official closing price against Binance 1m
+                        Kline
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* The standard claim/resolution panel */}
               <ResolutionPanel
                 marketId={marketId}
                 creatorAddress={apiData?.creator || ""}
