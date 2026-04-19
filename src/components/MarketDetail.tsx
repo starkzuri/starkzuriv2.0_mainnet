@@ -94,7 +94,7 @@ const calculatePayout = (investedAmount: string, price: number) => {
   };
 };
 
-const API_URL = "https://starknet-indexer-apibara-mainnet.onrender.com";
+const API_URL = "https://starknet-indexer-apibara-mainnet-19ew.onrender.com";
 
 export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const { address } = useAuth();
