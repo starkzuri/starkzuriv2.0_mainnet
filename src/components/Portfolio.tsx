@@ -29,10 +29,39 @@ interface UserPosition {
   yesShares: number;
   noShares: number;
   invested: number;
-  currentValue: number;
+  currentValue: number; // claimable now
+  displayValue: number; // shown in UI
   profitLoss: number;
   status: number;
   outcome?: boolean;
+  hasClaimed: boolean;
+}
+
+interface PortfolioBet {
+  marketId: number | string;
+  category: string | null;
+  creator: string | null;
+  question: string | null;
+  media: string | null;
+  timestamp: number | null;
+  transactionHash: string | null;
+  endTime: number | null;
+  poolYes: number | null;
+  poolNo: number | null;
+  totalVolume: number | null;
+  yesPrice: number | null;
+  noPrice: number | null;
+  marketYesShares: number | null;
+  marketNoShares: number | null;
+  status: number | null;
+  outcome?: boolean | null;
+  proposalTimestamp: number | null;
+
+  positionId: number;
+  user: string;
+  positionYesShares: number;
+  positionNoShares: number;
+  totalInvested: number;
   hasClaimed: boolean;
 }
 
@@ -149,65 +178,74 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
     const fetchPortfolio = async () => {
       setLoading(true);
       try {
-        // 🟢 1. We ONLY fetch the positions now, because the backend leftJoin gives us the market data too!
         const posRes = await fetch(`${API_URL}/positions/${address}`);
         if (!posRes.ok) throw new Error("Failed to fetch positions");
 
         const myBets = await posRes.json();
+        console.log(myBets);
 
         const activePositions: UserPosition[] = myBets
-          .map((bet: any) => {
-            // 🟢 2. The 'bet' object now contains BOTH market info (status, yesPrice) AND position info (yesShares)
-
-            const yesShares = Number(bet.yesShares || 0);
-            const noShares = Number(bet.noShares || 0);
-            const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
+          .map((bet: PortfolioBet) => {
+            const yesShares = Number(bet.positionYesShares || 0);
+            const noShares = Number(bet.positionNoShares || 0);
+            const claimed = Boolean(bet.hasClaimed);
 
             if (!claimed && yesShares <= 0 && noShares <= 0) return null;
 
-            const realInvested = Number(
-              bet.totalInvested || bet.total_invested || 0,
-            );
+            const realInvested = Number(bet.totalInvested || 0);
             const costBasis =
               realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
 
+            const isResolved = bet.status === 3;
+            const isYesWinner = bet.outcome === true;
+            const winningShares = isYesWinner ? yesShares : noShares;
+
+            const totalWinningShares = isYesWinner
+              ? Number(bet.marketYesShares || 0)
+              : Number(bet.marketNoShares || 0);
+
+            const totalPot = Number(bet.totalVolume || 0);
+
+            let payoutValue = 0;
+            if (
+              isResolved &&
+              winningShares > 0 &&
+              totalWinningShares > 0 &&
+              totalPot > 0
+            ) {
+              payoutValue = (winningShares / totalWinningShares) * totalPot;
+            }
+
             let currentRealValue = 0;
+            let displayValue = 0;
 
-            // 🟢 3. Math logic remains the same, just referencing 'bet' directly
-            if (claimed || bet.status === 3) {
-              const isYesWinner = bet.outcome === true;
-              const winningShares = isYesWinner ? yesShares : noShares;
-
-              const totalWinningReal = isYesWinner
-                ? Number(bet.yesShares || 0) // Note: This is the MARKET's total yesShares, assuming backend mapped it
-                : Number(bet.noShares || 0);
-
-              const totalRealVolume = Number(bet.totalVolume || 0);
-
-              if (totalWinningReal > 0 && winningShares > 0) {
-                currentRealValue =
-                  (winningShares / totalWinningReal) * totalRealVolume * 0.98;
-              }
+            if (isResolved) {
+              displayValue = payoutValue;
+              currentRealValue = claimed ? 0 : payoutValue;
             } else {
-              currentRealValue =
+              const markedValue =
                 yesShares * Number(bet.yesPrice || 0) +
                 noShares * Number(bet.noPrice || 0);
+
+              currentRealValue = markedValue;
+              displayValue = markedValue;
             }
 
             return {
-              prediction: mapMarketToPrediction(bet), // Safely parses live_chart JSON thanks to our previous fix!
-              marketId: bet.marketId.toString(),
+              prediction: mapMarketToPrediction(bet),
+              marketId: String(bet.marketId),
               yesShares,
               noShares,
               invested: costBasis,
               currentValue: currentRealValue,
-              profitLoss: currentRealValue - costBasis,
+              displayValue,
+              profitLoss: displayValue - costBasis,
               status: bet.status || 1,
-              outcome: bet.outcome,
+              outcome: bet.outcome ?? undefined,
               hasClaimed: claimed,
             };
           })
-          .filter(Boolean);
+          .filter(Boolean) as UserPosition[];
 
         setPositions(activePositions);
       } catch (e) {
@@ -216,7 +254,6 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
         setLoading(false);
       }
     };
-
     fetchPortfolio();
   }, [address]);
   useEffect(() => {
@@ -861,7 +898,7 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
                           />
                           <StatCell
                             label="Payout"
-                            value={fmtUSD(position.currentValue)}
+                            value={fmtUSD(position.displayValue)}
                             color="#00ff88"
                           />
                         </div>
@@ -925,10 +962,12 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
                           label="Invested"
                           value={fmtUSD(position.invested)}
                         />
+                        &nbsp;
                         <StatCell
-                          label="Value"
+                          label="Claimable"
                           value={fmtUSD(position.currentValue)}
                         />
+                        &nbsp;
                         <StatCell
                           label="P&L"
                           value={
