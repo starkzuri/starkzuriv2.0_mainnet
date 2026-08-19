@@ -27,7 +27,8 @@ import { mapMarketToPrediction, ApiMarket } from "../lib/marketMapper";
 import { Prediction } from "../types/prediction";
 import { useProfile } from "../hooks/useProfile";
 
-const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
+import { INDEXER_URL as API_URL } from "../constants";
+import { padAddress } from "../lib/format";
 
 type ProfileTab = "predictions" | "investments" | "media" | "settings";
 
@@ -998,8 +999,7 @@ export function Profile({ targetAddress }: ProfileProps) {
                   <IconBtn
                     onClick={() => {
                       const safeAddr = activeAddress
-                        ? "0x" +
-                          activeAddress.replace("0x", "").padStart(64, "0")
+                        ? padAddress(activeAddress)
                         : "0x0";
                       navigator.clipboard.writeText(
                         `${window.location.origin}/?ref=${safeAddr}`,

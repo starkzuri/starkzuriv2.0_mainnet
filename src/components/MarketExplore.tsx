@@ -15,7 +15,7 @@ import { useAuth } from "../hooks/useAuth";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 6;
-const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
+import { INDEXER_URL as API_URL } from "../constants";
 
 type MarketView = "all" | "trending" | "rising-yes" | "rising-no" | "new";
 

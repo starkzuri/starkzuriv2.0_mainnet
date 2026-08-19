@@ -8,7 +8,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 if (!privyAppId || privyAppId === "your-privy-app-id") {
   throw new Error(
-    "Set VITE_PRIVY_APP_ID in examples/gift-app/.env to your Privy App ID (same one used by the server)"
+    "Set VITE_PRIVY_APP_ID in .env to your Privy App ID (same one used by the server)"
   );
 }
 

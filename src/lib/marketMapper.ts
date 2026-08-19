@@ -1,4 +1,5 @@
 import { Prediction } from "../types/prediction";
+import { avatarFor } from "./format";
 
 // 🟢 NEW: Define ApiMarket interface here so it's shared
 export interface ApiMarket {
@@ -59,7 +60,7 @@ export function mapMarketToPrediction(market: ApiMarket): Prediction {
   // 🟢 LOGIC: Use DB Avatar -> Fallback to DiceBear
   const avatar = market.creatorAvatar
     ? market.creatorAvatar
-    : `https://api.dicebear.com/7.x/identicon/svg?seed=${market.creator}`;
+    : avatarFor(market.creator);
 
   return {
     id: market.marketId.toString(),

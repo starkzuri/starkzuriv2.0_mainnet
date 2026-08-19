@@ -74,6 +74,14 @@ VITE_USDC_ADDRESS=0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf3
 # ── Privy ───────────────────────────────────────────────────
 VITE_PRIVY_APP_ID=your-privy-app-id
 VITE_PRIVY_SERVER_URL=https://your-privy-signing-server.onrender.com
+
+# ── Pinata (IPFS media uploads) ─────────────────────────────
+# ⚠️ VITE_* values are inlined into the client bundle and are readable by
+# anyone who loads the app. VITE_JWT_SECRET is a real credential — scope it
+# to upload-only and rotate it if it leaks. Moving uploads behind a backend
+# proxy is the proper fix.
+VITE_JWT_SECRET=your-pinata-jwt
+VITE_PINATA_GATEWAY_URL=https://your-gateway.mypinata.cloud/ipfs/
 ```
 
 > **Never commit your `.env` file.** It is already included in `.gitignore`.

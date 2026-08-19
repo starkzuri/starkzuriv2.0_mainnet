@@ -9,7 +9,7 @@ const networks = [
     icon: Zap,
     color: "#1F87FC",
     dot: "#22c55e",
-    href: "https://app.starkzuri.com/",
+    href: "https://starkzuriv2-0-mainnet.vercel.app/",
   },
   {
     id: "testnet",
@@ -18,7 +18,7 @@ const networks = [
     icon: Radio,
     color: "#a78bfa",
     dot: "#f59e0b",
-    href: "https://testnet.starkzuri.com/",
+    href: "starkzuri.vercel.app",
   },
 ];
 

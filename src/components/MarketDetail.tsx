@@ -22,6 +22,8 @@ import CommentsSection from "./CommentSection";
 import { SellSharesPanel } from "./subcomponents/SellSharesPanel";
 import { toast } from "sonner";
 import { LiveTradingChart } from "./live/LiveTradingChart";
+import { INDEXER_URL as API_URL } from "../constants";
+import { avatarFor, formatNumber, padAddress } from "../lib/format";
 
 interface MarketDetailProps {
   marketId: string;
@@ -67,13 +69,6 @@ function aggregateChartData(rawData: any[], bucketCount = 60) {
   }));
 }
 
-const formatAddress = (addr: string) => {
-  if (!addr) return "";
-  let hex = addr.toLowerCase();
-  if (!hex.startsWith("0x")) hex = "0x" + hex;
-  while (hex.length < 66) hex = "0x0" + hex.substring(2);
-  return hex;
-};
 
 const calculatePayout = (investedAmount: string, price: number) => {
   if (
@@ -93,8 +88,6 @@ const calculatePayout = (investedAmount: string, price: number) => {
     roi: roi.toFixed(0),
   };
 };
-
-const API_URL = "https://starknet-indexer-apibara-mainnet-19ew.onrender.com";
 
 export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const { address } = useAuth();
@@ -117,14 +110,20 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
   const [isFetchingClose, setIsFetchingClose] = useState(false);
 
   useEffect(() => {
+    // Cancels in-flight requests when marketId/address changes or on unmount,
+    // so a slow response can never overwrite a newer market's state.
+    const controller = new AbortController();
+    const { signal } = controller;
+
     const fetchMarketData = async () => {
       try {
-        const res = await fetch(`${API_URL}/markets/${marketId}`);
+        const res = await fetch(`${API_URL}/markets/${marketId}`, { signal });
         if (!res.ok) {
           setLoading(false);
           return;
         }
         const rawMarket: ApiMarket = await res.json();
+        if (signal.aborted) return;
 
         if (rawMarket) {
           setApiData(rawMarket);
@@ -160,7 +159,7 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
             creator: {
               name: `User ${rawMarket.creator.slice(0, 4)}`,
               username: `@${rawMarket.creator.slice(0, 6)}...`,
-              avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${rawMarket.creator}`,
+              avatar: avatarFor(rawMarket.creator),
             },
             question: rawMarket.question,
             category: rawMarket.category || "General",
@@ -189,9 +188,11 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
 
         const historyRes = await fetch(
           `${API_URL}/markets/${marketId}/history`,
+          { signal },
         );
         if (historyRes.ok) {
           const historyData = await historyRes.json();
+          if (signal.aborted) return;
           const formattedHistory = historyData
             .map((item: any) => ({
               ...item,
@@ -209,12 +210,14 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
 
         if (address) {
           try {
-            const dbAddress = formatAddress(address);
+            const dbAddress = padAddress(address);
             const positionRes = await fetch(
               `${API_URL}/markets/${marketId}/position/${dbAddress}`,
+              { signal },
             );
             if (positionRes.ok) {
               const data = await positionRes.json();
+              if (signal.aborted) return;
               setMyShares({
                 yes: Number(data.yesShares || data.yes_shares || 0),
                 no: Number(data.noShares || data.no_shares || 0),
@@ -225,20 +228,27 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
             } else {
               setMyShares({ yes: 0, no: 0, hasClaimed: false });
             }
-          } catch (e) {
-            console.error("Failed to load position:", e);
+          } catch (e: any) {
+            if (e?.name !== "AbortError") {
+              console.error("Failed to load position:", e);
+            }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        // An abort is normal navigation, not a failure.
+        if (e?.name === "AbortError") return;
         console.error("Error fetching detail:", e);
       } finally {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     };
 
     fetchMarketData();
     const interval = setInterval(fetchMarketData, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [marketId, address]);
 
   // ── Bulletproof Parse Media Config ──
@@ -309,12 +319,6 @@ export function MarketDetail({ marketId, onBack }: MarketDetailProps) {
     await buyShares(marketId, isYes, parseFloat(amount));
   };
 
-  const formatNumber = (num: number | string) => {
-    const n = typeof num === "string" ? parseFloat(num) : num;
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toString();
-  };
 
   const getTimeRemaining = () => {
     if (!prediction) return "";

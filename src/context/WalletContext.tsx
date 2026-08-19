@@ -5,7 +5,6 @@ import { WebWalletConnector } from "starknetkit/webwallet";
 import { AccountInterface, constants } from "starknet";
 import { ControllerConnector } from "@cartridge/connector";
 
-// const MAINNET_CHAIN_ID = "";
 // 1. DEFINE CONNECTORS
 const connectors = [
   // Standard Wallets (Argent X / Braavos)
@@ -19,7 +18,7 @@ const connectors = [
   // Mobile/Web Wallet Fallback
   new WebWalletConnector({ url: "https://web.argent.xyz" }),
 
-  // 👇 THE FIX: CARTRIDGE CONTROLLER FOR SEPOLIA
+  // 👇 THE FIX: CARTRIDGE CONTROLLER FOR MAINNET
 
   new ControllerConnector({
     // 1. Policies are now mandatory for the "Session" to work right
@@ -31,11 +30,10 @@ const connectors = [
       },
     ],
 
-    // 2. Define the Chain (Only Sepolia)
+    // 2. Define the Chain (Only Mainnet)
     chains: [
       {
         rpcUrl: "https://api.cartridge.gg/x/starknet/mainnet", // Official Cartridge RPC is best for Controller
-        // OR use your Alchemy: "https://starknet-sepolia.g.alchemy.com/v2/YOUR_KEY"
       },
     ],
 

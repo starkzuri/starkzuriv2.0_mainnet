@@ -12,8 +12,6 @@ import { MarketDetail } from "./components/MarketDetail";
 import { Rewards } from "./components/Rewards";
 import { LoginModal } from "./components/LoginModal";
 import { toast, Toaster } from "sonner";
-import { LiveTradingChart } from "./components/live/LiveTradingChart";
-// import { LiveActionFeed } from "./components/LiveActionFeed";
 
 type Screen =
   | "home"
@@ -32,8 +30,7 @@ export default function App() {
     string | null
   >(null);
 
-  // 🟢 FIX: Use your existing context state
-  const { address, account, disconnectWallet } = useWallet(); // removed connectWallet if unused
+  const { account, disconnectWallet } = useWallet();
   const isConnected = !!account; // If account exists, we are connected
 
   const handleLogin = async () => {

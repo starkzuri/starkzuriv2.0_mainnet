@@ -1,3 +1,22 @@
+/*
+ * ⚠️  THIS FILE IS NOT IMPORTED AND HAS NO EFFECT AT RUNTIME.
+ *
+ * It is the Tailwind v4 *source* for `src/index.css`, which is a pre-compiled
+ * CSS blob that main.tsx imports instead. Tailwind is not currently a project
+ * dependency and there is no tailwind.config / postcss.config, so nothing
+ * recompiles this file.
+ *
+ * Consequences, until the Tailwind build is restored:
+ *   - Editing THIS file changes nothing. Verified: every declaration here is
+ *     already present in src/index.css (minified: #ffffff -> #fff, rgba() -> hex8).
+ *   - Adding a new Tailwind utility class in a component does nothing either,
+ *     unless that class already happens to exist in the compiled blob.
+ *   - New styling must be hand-written CSS appended to src/index.css.
+ *
+ * Kept as the human-readable record of the theme and the input needed to
+ * restore the real Tailwind pipeline. Do not delete.
+ */
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

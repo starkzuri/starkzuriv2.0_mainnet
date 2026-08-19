@@ -21,7 +21,7 @@ import { Prediction } from "../types/prediction";
 import { toast } from "sonner";
 import { CallData, RpcProvider, uint256 } from "starknet";
 
-const API_URL = import.meta.env.VITE_INDEXER_SERVER_URL;
+import { INDEXER_URL as API_URL } from "../constants";
 
 interface UserPosition {
   prediction: Prediction;
@@ -106,82 +106,24 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
   const [usdcBalance, setUsdcBalance] = useState("0.00");
   const [balanceLoading, setBalanceLoading] = useState(false);
 
-  // useEffect(() => {
-  //   if (!address) return;
-  //   const fetchPortfolio = async () => {
-  //     setLoading(true);
-  //     try {
-  //       const [marketsRes, posRes] = await Promise.all([
-  //         fetch(`${API_URL}/markets`),
-  //         fetch(`${API_URL}/positions/${address}`),
-  //       ]);
-  //       const marketsData: ApiMarket[] = await marketsRes.json();
-  //       const myBets = await posRes.json();
-
-  //       const activePositions: UserPosition[] = myBets
-  //         .map((bet: any) => {
-  //           const market = marketsData.find((m) => m.marketId === bet.marketId);
-  //           if (!market) return null;
-  //           const yesShares = Number(bet.yesShares);
-  //           const noShares = Number(bet.noShares);
-  //           const claimed = Boolean(bet.hasClaimed || bet.has_claimed || false);
-  //           if (!claimed && yesShares <= 0 && noShares <= 0) return null;
-  //           const realInvested = Number(
-  //             bet.totalInvested || bet.total_invested || 0,
-  //           );
-  //           const costBasis =
-  //             realInvested > 0 ? realInvested : (yesShares + noShares) * 0.5;
-  //           let currentRealValue = 0;
-  //           if (claimed || market.status === 3) {
-  //             const isYesWinner = market.outcome === true;
-  //             const winningShares = isYesWinner ? yesShares : noShares;
-  //             const totalWinningReal = isYesWinner
-  //               ? Number(market.yesShares || 0)
-  //               : Number(market.noShares || 0);
-  //             const totalRealVolume = Number(market.totalVolume || 0);
-  //             if (totalWinningReal > 0 && winningShares > 0) {
-  //               currentRealValue =
-  //                 (winningShares / totalWinningReal) * totalRealVolume * 0.98;
-  //             }
-  //           } else {
-  //             currentRealValue =
-  //               yesShares * Number(market.yesPrice || 0) +
-  //               noShares * Number(market.noPrice || 0);
-  //           }
-  //           return {
-  //             prediction: mapMarketToPrediction(market),
-  //             marketId: market.marketId.toString(),
-  //             yesShares,
-  //             noShares,
-  //             invested: costBasis,
-  //             currentValue: currentRealValue,
-  //             profitLoss: currentRealValue - costBasis,
-  //             status: market.status || 1,
-  //             outcome: market.outcome,
-  //             hasClaimed: claimed,
-  //           };
-  //         })
-  //         .filter(Boolean);
-  //       setPositions(activePositions);
-  //     } catch (e) {
-  //       console.error("Error fetching portfolio", e);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-  //   fetchPortfolio();
-  // }, [address]);
-
   useEffect(() => {
     if (!address) return;
+
+    // Cancels the in-flight request when address changes or on unmount, so a
+    // slow response cannot overwrite a newer address's positions.
+    const controller = new AbortController();
+    const { signal } = controller;
 
     const fetchPortfolio = async () => {
       setLoading(true);
       try {
-        const posRes = await fetch(`${API_URL}/positions/${address}`);
+        const posRes = await fetch(`${API_URL}/positions/${address}`, {
+          signal,
+        });
         if (!posRes.ok) throw new Error("Failed to fetch positions");
 
         const myBets = await posRes.json();
+        if (signal.aborted) return;
         console.log(myBets);
 
         const activePositions: UserPosition[] = myBets
@@ -248,16 +190,24 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
           .filter(Boolean) as UserPosition[];
 
         setPositions(activePositions);
-      } catch (e) {
+      } catch (e: any) {
+        // An abort is normal navigation, not a failure.
+        if (e?.name === "AbortError") return;
         console.error("Error fetching portfolio", e);
       } finally {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     };
     fetchPortfolio();
+    return () => controller.abort();
   }, [address]);
   useEffect(() => {
     if (!address || !isConnected) return;
+
+    // starknet.js RpcProvider takes no AbortSignal, so guard with a cancelled
+    // flag instead: a reply arriving after teardown must not set state.
+    let cancelled = false;
+
     const fetchBalance = async () => {
       setBalanceLoading(true);
       try {
@@ -265,9 +215,7 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
           import.meta.env.VITE_USDC_ADDRESS ||
           "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
         const provider = new RpcProvider({
-          nodeUrl:
-            import.meta.env.VITE_NODE_URL ||
-            "https://starknet-mainnet.g.alchemy.com/v2/EzO62qQ-wC9-OQyeOyL1y",
+          nodeUrl: import.meta.env.VITE_NODE_URL,
         });
         const res = await provider.callContract({
           contractAddress: usdcAddress,
@@ -275,16 +223,21 @@ export function Portfolio({ onViewMarket }: PortfolioProps) {
           calldata: CallData.compile([address]),
         });
         const balanceBN = uint256.uint256ToBN({ low: res[0], high: res[1] });
+        if (cancelled) return;
         setUsdcBalance((Number(balanceBN.toString()) / 1_000_000).toFixed(2));
       } catch {
+        if (cancelled) return;
         setUsdcBalance("0.00");
       } finally {
-        setBalanceLoading(false);
+        if (!cancelled) setBalanceLoading(false);
       }
     };
     fetchBalance();
     const iv = setInterval(fetchBalance, 10000);
-    return () => clearInterval(iv);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
   }, [address, isConnected]);
 
   const handleClaim = async (marketId: string, e: React.MouseEvent) => {

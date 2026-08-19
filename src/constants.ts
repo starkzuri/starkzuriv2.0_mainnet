@@ -22,6 +22,15 @@ export const NETWORKS: NetworkConfig[] = [
   
 ];
 
+/**
+ * Base URL of the StarkZuri indexer API.
+ * The fallback matches the currently-deployed mainnet indexer, so behaviour is
+ * unchanged if VITE_INDEXER_SERVER_URL is unset.
+ */
+export const INDEXER_URL =
+  import.meta.env.VITE_INDEXER_SERVER_URL ||
+  "https://starknet-indexer-apibara-mainnet.onrender.com";
+
 export const PRIVY_SERVER_URL =
   (import.meta as unknown as { env?: Record<string, string> }).env
     ?.VITE_PRIVY_SERVER_URL ?? "http://localhost:3001";

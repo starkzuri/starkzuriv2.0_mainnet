@@ -128,7 +128,6 @@ export const useResolution = () => {
           },
         ];
 
-        // const { transaction_hash } = await account.execute(calls);
         const { transaction_hash } = await execute(calls);
         toast.success("winnings claimed");
       } catch (e) {
