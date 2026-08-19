@@ -28,7 +28,7 @@ import { Prediction } from "../types/prediction";
 import { useProfile } from "../hooks/useProfile";
 
 import { INDEXER_URL as API_URL } from "../constants";
-import { padAddress } from "../lib/format";
+import { padAddress, toNum } from "../lib/format";
 
 type ProfileTab = "predictions" | "investments" | "media" | "settings";
 
@@ -111,14 +111,20 @@ export function Profile({ targetAddress }: ProfileProps) {
               (m) => m.marketId === pos.marketId,
             );
             if (!market) return null;
-            console.log("position ", pos);
-            const yesShares = Number(pos.positionYesShares);
-            const noShares = Number(pos.positionNoShares);
+
+            // The /positions endpoint returns these as `yesShares`/`noShares`.
+            // The `position*` names are kept as a fallback in case the indexer
+            // schema changes back. Bare Number() was used here before, and
+            // Number(undefined) is NaN — which slipped past the `=== 0` guard
+            // below and rendered as "NaN P&L".
+            const yesShares = toNum(pos.yesShares ?? pos.positionYesShares);
+            const noShares = toNum(pos.noShares ?? pos.positionNoShares);
             if (yesShares === 0 && noShares === 0) return null;
+
             const currentValue =
-              yesShares * market.yesPrice + noShares * market.noPrice;
-            // console.log("currentvalue ", currentValue);
-            const cost = Number(pos.totalInvested || 0);
+              yesShares * toNum(market.yesPrice) +
+              noShares * toNum(market.noPrice);
+            const cost = toNum(pos.totalInvested);
             calculatedProfit += currentValue - cost;
 
             return {
@@ -143,7 +149,7 @@ export function Profile({ targetAddress }: ProfileProps) {
           setStats({
             predictions: myMarkets.length,
             investments: myInvestments.length,
-            totalProfit: Number(calculatedProfit.toFixed(2)),
+            totalProfit: toNum(calculatedProfit.toFixed(2)),
             winRate: 68,
             referrals: userData.referralCount || 0,
           });
@@ -838,12 +844,12 @@ export function Profile({ targetAddress }: ProfileProps) {
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          color: pos.pnl >= 0 ? "#00ff88" : "#ff3366",
+                          color: toNum(pos.pnl) >= 0 ? "#00ff88" : "#ff3366",
                           fontVariantNumeric: "tabular-nums",
                         }}
                       >
-                        {pos.pnl >= 0 ? "+" : ""}
-                        {pos.pnl.toFixed(2)} P&L
+                        {toNum(pos.pnl) >= 0 ? "+" : ""}
+                        {toNum(pos.pnl).toFixed(2)} P&L
                       </span>
                     </div>
                   </div>

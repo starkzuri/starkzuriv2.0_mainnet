@@ -39,6 +39,18 @@ export const padAddress = (addr: string): string => {
   return hex;
 };
 
+/**
+ * Coerce an API value to a finite number, falling back to `fallback`.
+ *
+ * `Number(undefined)` is NaN, and NaN propagates silently through arithmetic
+ * while defeating `=== 0` guards — which is how a renamed API field turns into
+ * "NaN" in the UI. Use this at every API boundary instead of bare `Number()`.
+ */
+export const toNum = (value: unknown, fallback = 0): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 /** Deterministic fallback avatar for an address with no profile picture. */
 export const avatarFor = (seed: string): string =>
   `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}`;
