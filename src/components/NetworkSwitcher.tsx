@@ -18,7 +18,7 @@ const networks = [
     icon: Radio,
     color: "#a78bfa",
     dot: "#f59e0b",
-    href: "starkzuri.vercel.app",
+    href: "https://starkzuri.vercel.app/",
   },
 ];
 
